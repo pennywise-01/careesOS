@@ -1,0 +1,47 @@
+export const salaryData = [
+  { role: 'IT Support Specialist', city: 'KL', p25: 2200, p50: 3200, p75: 4200, p90: 5000 },
+  { role: 'IT Support Specialist', city: 'JB', p25: 1800, p50: 2800, p75: 3600, p90: 4200 },
+  { role: 'IT Support Specialist', city: 'SG', p25: 7000, p50: 10000, p75: 12000, p90: 15000 },
+  { role: 'Cloud Engineer', city: 'KL', p25: 4500, p50: 7200, p75: 9000, p90: 11000 },
+  { role: 'Cloud Engineer', city: 'JB', p25: 3500, p50: 6000, p75: 7500, p90: 9000 },
+  { role: 'Cloud Engineer', city: 'SG', p25: 14000, p50: 22000, p75: 28000, p90: 35000 },
+  { role: 'Cloud Engineer', city: 'JKT', p25: 8000000, p50: 14000000, p75: 18000000, p90: 22000000 },
+  { role: 'Cloud Engineer', city: 'BKK', p25: 50000, p50: 85000, p75: 110000, p90: 140000 },
+  { role: 'Cloud Engineer', city: 'MNL', p25: 50000, p50: 80000, p75: 105000, p90: 130000 },
+  { role: 'Cloud Engineer', city: 'Penang', p25: 4200, p50: 6500, p75: 8000, p90: 9800 },
+  { role: 'Systems Administrator', city: 'KL', p25: 3500, p50: 5000, p75: 6500, p90: 7800 },
+  { role: 'DevOps Lead', city: 'KL', p25: 6500, p50: 10500, p75: 14000, p90: 17000 },
+  { role: 'DevOps Lead', city: 'SG', p25: 20000, p50: 32000, p75: 40000, p90: 50000 },
+  { role: 'Solutions Architect', city: 'KL', p25: 10000, p50: 16000, p75: 20000, p90: 25000 },
+  { role: 'Solutions Architect', city: 'SG', p25: 30000, p50: 45000, p75: 55000, p90: 70000 },
+  { role: 'Engineering Manager', city: 'KL', p25: 12000, p50: 19000, p75: 25000, p90: 30000 },
+  { role: 'Engineering Manager', city: 'SG', p25: 35000, p50: 52000, p75: 65000, p90: 80000 },
+  { role: 'CTO', city: 'KL', p25: 20000, p50: 35000, p75: 45000, p90: 60000 },
+  { role: 'Junior HR Executive', city: 'SG', p25: 2400, p50: 3300, p75: 3800, p90: 4500 },
+  { role: 'People Analytics Lead', city: 'SG', p25: 5500, p50: 8000, p75: 9500, p90: 11000 },
+  { role: 'VP People', city: 'SG', p25: 10000, p50: 16000, p75: 20000, p90: 25000 },
+  { role: 'Senior Software Engineer', city: 'KL', p25: 6000, p50: 9500, p75: 12000, p90: 15000 },
+  { role: 'Marketing Manager', city: 'JB', p25: 5000, p50: 8000, p75: 10000, p90: 12500 },
+  { role: 'Head of Marketing', city: 'JB', p25: 8000, p50: 13000, p75: 16000, p90: 20000 },
+  { role: 'CMO', city: 'JB', p25: 14000, p50: 22000, p75: 28000, p90: 35000 },
+  { role: 'Cybersecurity Analyst', city: 'KL', p25: 4000, p50: 6500, p75: 8500, p90: 10000 },
+  { role: 'Product Manager', city: 'KL', p25: 6000, p50: 9500, p75: 12000, p90: 15000 },
+];
+
+export const cityLabels = {
+  KL: 'Kuala Lumpur',
+  JB: 'Johor Bahru',
+  Penang: 'Penang',
+  SG: 'Singapore',
+  JKT: 'Jakarta',
+  MNL: 'Manila',
+  BKK: 'Bangkok',
+};
+
+export const cityCurrencies = {
+  KL: 'RM', JB: 'RM', Penang: 'RM',
+  SG: 'SGD',
+  JKT: 'IDR',
+  MNL: 'PHP',
+  BKK: 'THB',
+};
