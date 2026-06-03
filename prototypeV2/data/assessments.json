@@ -1,0 +1,20 @@
+[
+  {
+    "id": "a1",
+    "candidate_id": "c1",
+    "skill_tested": "Kubernetes",
+    "task_type": "cloud_security_audit",
+    "raw_score": 0.85,
+    "normalised_score": 0.85,
+    "verified": true
+  },
+  {
+    "id": "a2",
+    "candidate_id": "c1",
+    "skill_tested": "Python",
+    "task_type": "code_review",
+    "raw_score": 0.92,
+    "normalised_score": 0.92,
+    "verified": true
+  }
+]

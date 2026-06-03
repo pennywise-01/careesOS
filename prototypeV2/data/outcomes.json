@@ -1,0 +1,20 @@
+[
+  {
+    "match_id": "m1",
+    "candidate_id": "c1",
+    "job_id": "j1",
+    "manager_rating_90d": 5,
+    "hire_satisfaction_90d": 5,
+    "retained_180d": true,
+    "label": "successful"
+  },
+  {
+    "match_id": "m2",
+    "candidate_id": "c2",
+    "job_id": "j1",
+    "manager_rating_90d": 2,
+    "hire_satisfaction_90d": 3,
+    "retained_180d": false,
+    "label": "poor"
+  }
+]

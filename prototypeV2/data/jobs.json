@@ -1,0 +1,12 @@
+[
+  {
+    "id": "j1",
+    "title": "Senior Platform Engineer",
+    "required_skills": [
+      {"name": "Kubernetes", "level": "senior", "non_negotiable": true},
+      {"name": "Python", "level": "senior", "non_negotiable": true}
+    ],
+    "team_context": {"size": 8, "pace": "balanced", "autonomy_offered": "high"},
+    "embedding_mock": [0.15, 0.85, 0.35, 0.88]
+  }
+]
