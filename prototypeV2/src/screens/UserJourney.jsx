@@ -2,26 +2,19 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '../components/Sidebar';
-import { job as targetJob } from '../data/mockData';
-
-const questionnaire = [
-  { id: "q1", label: "1. Proudest Work", question: "Tell me about a piece of work you're most proud of. What was the problem? What did you specifically do — not your team, you? What changed as a result?" },
-  { id: "q2", label: "2. Technical Complexity", question: "Describe the most technically complex thing you've built or solved. Walk me through your approach." },
-  { id: "q3", label: "3. Work Environment", question: "What kind of environment do you do your best work in? Think about team size, pace, how decisions get made, and how much ambiguity you're comfortable with." },
-  { id: "q4", label: "4. Career Trajectory", question: "What are you trying to move toward in your career in the next 2 years? And what are you actively trying to move away from?" },
-  { id: "q5", label: "5. Failure & Learning", question: "Tell me about a time something you built failed or underperformed. What happened, and what did you do about it?" },
-  { id: "q6", label: "6. Domain Approach", question: "Walk me through how you approach performance optimization or threat modeling for a new system." }
-];
+import { jobs } from '../data/mockData';
 
 export default function UserJourney() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedJob, setSelectedJob] = useState(null);
   
   // Application State
   const [answers, setAnswers] = useState({});
   const [resumeFile, setResumeFile] = useState(null);
   const [assessmentAnswer, setAssessmentAnswer] = useState('');
+  const [contactInfo, setContactInfo] = useState({ name: '', email: '', phone: '' });
   
   // Backend/AI State
   const [profile, setProfile] = useState(null);
@@ -80,7 +73,7 @@ export default function UserJourney() {
     setIsProcessing(true);
     setProcessingLog("Sending submission to DeepSeek for grading...");
     try {
-      const task = `Task: EKS IAM Policy Audit & Optimization\nThe candidate must: (1) identify the security flaw in a policy granting s3:* on *, (2) write a corrected least-privilege IAM policy, (3) explain their reasoning and edge cases.`;
+      const task = selectedJob.work_sample_task;
       const response = await fetch('/api/grade-assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -119,20 +112,24 @@ export default function UserJourney() {
   const calculateMatch = () => {
     if (!profile) return null;
 
-    const requiredSkills = targetJob.required_skills.filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
+    const requiredSkills = selectedJob.required_skills.filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
     const candidateSkills = profile.skills.map(s => s.name.toLowerCase());
-    const matchedSkills = requiredSkills.filter(skill => candidateSkills.includes(skill));
+    const skillMatches = (req, extracted) => {
+      const words = req.split(/\s+/).filter(w => w.length > 3);
+      return words.some(w => extracted.some(s => s.includes(w))) || extracted.some(s => s.includes(req));
+    };
+    const matchedSkills = requiredSkills.filter(req => skillMatches(req, candidateSkills));
     const skillCoverage = requiredSkills.length > 0 ? matchedSkills.length / requiredSkills.length : 0;
 
     let contextMatches = 0;
     let contextTotal = 0;
-    if (profile.work_context?.preferred_pace && targetJob.team_context?.pace) {
+    if (profile.work_context?.preferred_pace && selectedJob.team_context?.pace) {
       contextTotal++;
-      if (profile.work_context.preferred_pace === targetJob.team_context.pace) contextMatches++;
+      if (profile.work_context.preferred_pace === selectedJob.team_context.pace) contextMatches++;
     }
-    if (profile.work_context?.autonomy_level && targetJob.team_context?.autonomy_offered) {
+    if (profile.work_context?.autonomy_level && selectedJob.team_context?.autonomy_offered) {
       contextTotal++;
-      if (profile.work_context.autonomy_level === targetJob.team_context.autonomy_offered) contextMatches++;
+      if (profile.work_context.autonomy_level === selectedJob.team_context.autonomy_offered) contextMatches++;
     }
     const contextFit = contextTotal > 0 ? contextMatches / contextTotal : 0.5;
 
@@ -170,6 +167,9 @@ export default function UserJourney() {
           ← Back to Dashboard
         </button>
         <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">[T] Career OS V2 · Comprehensive Journey</span>
+        <button onClick={() => navigate('/reviewer')} className="text-sm font-medium px-4 py-2 rounded-lg bg-employer-accent text-bg hover:opacity-90 transition-colors">
+          Reviewer Dashboard →
+        </button>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -184,20 +184,28 @@ export default function UserJourney() {
                   <div>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 1 · Job Discovery</span>
                     <h2 className="font-display text-2xl text-text mt-1">Select a Role to Apply</h2>
+                    <p className="text-text-secondary text-sm mt-1">Each role has its own tailored questions and work sample task.</p>
                   </div>
-                  <div className="p-6 rounded-lg bg-surface border border-accent/20 hover:border-accent/40 transition-all cursor-pointer" onClick={() => setStep(2)}>
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-medium text-text">{targetJob.title}</h3>
-                        <p className="text-sm text-text-secondary mt-1">Platform Engineering · Full-time · Hybrid</p>
-                        <div className="flex gap-2 mt-3">
-                          {targetJob.required_skills.map(s => (
-                            <span key={s.name} className="px-2 py-1 rounded bg-elevated text-xs text-text-muted">{s.name} ({s.level})</span>
-                          ))}
+                  <div className="space-y-3">
+                    {jobs.map(j => (
+                      <div key={j.id} className="p-6 rounded-lg bg-surface border border-accent/20 hover:border-accent/40 transition-all cursor-pointer group" onClick={() => { setSelectedJob(j); setStep(2); }}>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="text-[10px] font-mono uppercase tracking-wider text-accent mb-1">{j.department}</div>
+                            <h3 className="text-lg font-medium text-text">{j.title}</h3>
+                            <p className="text-sm text-text-secondary mt-1">{j.type}</p>
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {j.required_skills.map(s => (
+                                <span key={s.name} className={`px-2 py-1 rounded text-xs ${s.non_negotiable ? 'bg-accent/10 text-accent' : 'bg-elevated text-text-muted'}`}>
+                                  {s.name} ({s.level}){s.non_negotiable && ' ✱'}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <span className="text-accent text-xl group-hover:translate-x-1 transition-transform">→</span>
                         </div>
                       </div>
-                      <span className="text-accent text-xl">→</span>
-                    </div>
+                    ))}
                   </div>
                 </motion.div>
               )}
@@ -208,7 +216,7 @@ export default function UserJourney() {
                   <div>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 2 · Candidate Profile Pipeline</span>
                     <h2 className="font-display text-2xl text-text mt-1">Guided Narrative Questionnaire</h2>
-                    <p className="text-text-secondary text-sm mt-1">Answer these 6 open-ended questions. Our AI evaluates your narrative to extract real evidence, preventing keyword stuffing.</p>
+                    <p className="text-text-secondary text-sm mt-1">Answer these 6 open-ended questions for the <strong className="text-accent">{selectedJob?.title}</strong> role. Our AI evaluates your narrative to extract real evidence, preventing keyword stuffing.</p>
                   </div>
 
                   {/* Evaluation Legend */}
@@ -236,7 +244,7 @@ export default function UserJourney() {
                   </div>
 
                   <form onSubmit={handleSubmitApplication} className="space-y-6">
-                    {questionnaire.map((q) => (
+                    {selectedJob?.questionnaire.map((q) => (
                       <div key={q.id}>
                         <label className="block text-sm font-medium text-text mb-2">
                           {q.question} <span className="text-danger">*</span>
@@ -333,29 +341,29 @@ export default function UserJourney() {
                     <div className="space-y-4">
                       <div className="p-5 rounded-lg bg-employer-surface border border-employer-accent/20">
                         <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-medium text-employer-accent">Task: EKS IAM Policy Audit & Optimization</h3>
-                          <span className="px-2 py-1 rounded bg-elevated text-[10px] text-text-muted font-mono">Time limit: 45 min</span>
+                          <h3 className="font-medium text-employer-accent">{selectedJob?.work_sample.title}</h3>
+                          <span className="px-2 py-1 rounded bg-elevated text-[10px] text-text-muted font-mono">Time limit: {selectedJob?.work_sample.time_limit}</span>
                         </div>
-                        
+
                         <div className="space-y-3 text-sm text-text-secondary mb-4">
-                          <p><strong className="text-text">Context:</strong> You are reviewing a Terraform module for a new microservice. The current IAM policy grants overly broad permissions to the pod execution role.</p>
+                          <p><strong className="text-text">Context:</strong> {selectedJob?.work_sample.context}</p>
                           <p><strong className="text-text">Your Task:</strong></p>
                           <ol className="list-decimal list-inside space-y-1 ml-2">
-                            <li>Identify the security flaw in the provided JSON policy below.</li>
-                            <li>Write the corrected, least-privilege IAM policy.</li>
-                            <li>Briefly explain your reasoning and any edge cases considered.</li>
+                            {selectedJob?.work_sample.steps.map((s, i) => <li key={i}>{s}</li>)}
                           </ol>
                         </div>
 
-                        <div className="p-3 rounded bg-bg border border-accent/10 font-mono text-xs text-text-muted mb-4 overflow-x-auto">
-                          {`{\n  "Version": "2012-10-17",\n  "Statement": [\n    {\n      "Effect": "Allow",\n      "Action": "s3:*",\n      "Resource": "*"\n    }\n  ]\n}`}
-                        </div>
+                        {selectedJob?.work_sample.artifact && (
+                          <div className={`p-3 rounded bg-bg border border-accent/10 text-xs text-text-muted mb-4 overflow-x-auto whitespace-pre-wrap ${selectedJob.work_sample.artifact_type === 'code' ? 'font-mono' : 'font-sans'}`}>
+                            {selectedJob.work_sample.artifact}
+                          </div>
+                        )}
 
                         <div>
                           <label className="block text-sm font-medium text-text mb-2">Your Solution & Reasoning:</label>
-                          <textarea 
+                          <textarea
                             className="w-full h-40 bg-bg border border-accent/20 rounded-lg p-3 text-text text-sm font-mono focus:outline-none focus:border-employer-accent transition-colors"
-                            placeholder="1. Flaw identified: ...&#10;2. Corrected policy: ...&#10;3. Reasoning: ..."
+                            placeholder={selectedJob?.work_sample.placeholder}
                             value={assessmentAnswer}
                             onChange={(e) => setAssessmentAnswer(e.target.value)}
                           ></textarea>
@@ -485,13 +493,91 @@ export default function UserJourney() {
                   </div>
 
                   <button onClick={() => setStep(6)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
+                    Continue to Submit →
+                  </button>
+                </motion.div>
+              )}
+
+              {/* STEP 6: Contact Info */}
+              {step === 6 && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Final Step · Contact Details</span>
+                    <h2 className="font-display text-2xl text-text mt-1">Your Contact Information</h2>
+                    <p className="text-text-secondary text-sm mt-1">This is only shared with the hiring team if you are shortlisted. It is not used in AI scoring.</p>
+                  </div>
+
+                  <div className="p-5 rounded-lg bg-surface border border-accent/10 space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-text mb-2">Full Name <span className="text-danger">*</span></label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-bg border border-accent/20 rounded-lg px-3 py-2 text-text text-sm focus:outline-none focus:border-accent transition-colors"
+                        placeholder="Your full name"
+                        value={contactInfo.name}
+                        onChange={e => setContactInfo(p => ({ ...p, name: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-text mb-2">Email Address <span className="text-danger">*</span></label>
+                      <input
+                        type="email"
+                        required
+                        className="w-full bg-bg border border-accent/20 rounded-lg px-3 py-2 text-text text-sm focus:outline-none focus:border-accent transition-colors"
+                        placeholder="you@example.com"
+                        value={contactInfo.email}
+                        onChange={e => setContactInfo(p => ({ ...p, email: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-text mb-2">Phone Number <span className="text-danger">*</span></label>
+                      <input
+                        type="tel"
+                        required
+                        className="w-full bg-bg border border-accent/20 rounded-lg px-3 py-2 text-text text-sm focus:outline-none focus:border-accent transition-colors"
+                        placeholder="+1 234 567 8900"
+                        value={contactInfo.phone}
+                        onChange={e => setContactInfo(p => ({ ...p, phone: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    disabled={!contactInfo.name || !contactInfo.email || !contactInfo.phone}
+                    onClick={() => {
+                      const avgConf = profile.skills.length > 0 ? profile.skills.reduce((s, sk) => s + sk.confidence, 0) / profile.skills.length : 0.5;
+                      const verScore = assessment ? assessment.normalised_score : 0;
+                      const application = {
+                        id: `live-${Date.now()}`,
+                        name: contactInfo.name,
+                        email: contactInfo.email,
+                        phone: contactInfo.phone,
+                        jobId: selectedJob.id,
+                        jobTitle: selectedJob.title,
+                        skills: profile.skills,
+                        work_context: profile.work_context,
+                        goals: profile.goals,
+                        soft_signals: profile.soft_signals,
+                        red_flags: profile.red_flags,
+                        assessment,
+                        matchScore,
+                        submittedAt: new Date().toISOString(),
+                        embedding_mock: [avgConf, Math.min(1, profile.skills.length / 10), verScore, avgConf * 0.9]
+                      };
+                      const existing = JSON.parse(localStorage.getItem('careesOS_applications') || '[]');
+                      localStorage.setItem('careesOS_applications', JSON.stringify([...existing, application]));
+                      setStep(7);
+                    }}
+                    className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
                     Submit Application →
                   </button>
                 </motion.div>
               )}
 
-              {/* STEP 6: Application Submitted (End of Applicant Journey) */}
-              {step === 6 && (
+              {/* STEP 7: Application Submitted (End of Applicant Journey) */}
+              {step === 7 && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 text-center py-12">
                   <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
                     <span className="text-4xl">✓</span>
@@ -519,10 +605,7 @@ export default function UserJourney() {
                   </div>
 
                   <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-                    <button onClick={() => navigate('/reviewer')} className="px-6 py-3 rounded-lg bg-employer-accent text-bg font-medium hover:opacity-90 transition-colors">
-                      Switch to Reviewer Dashboard →
-                    </button>
-                    <button onClick={() => { setStep(1); setAnswers({}); setResumeFile(null); setProfile(null); setAssessment(null); }} className="px-6 py-3 rounded-lg bg-elevated text-text font-medium hover:bg-highlight transition-colors">
+                    <button onClick={() => { setStep(1); setAnswers({}); setResumeFile(null); setProfile(null); setAssessment(null); setAssessmentAnswer(''); setContactInfo({ name: '', email: '', phone: '' }); setSelectedJob(null); }} className="px-6 py-3 rounded-lg bg-elevated text-text font-medium hover:bg-highlight transition-colors">
                       Start New Application
                     </button>
                   </div>

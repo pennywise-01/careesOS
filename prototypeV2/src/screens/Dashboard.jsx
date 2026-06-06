@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '../components/Sidebar';
-import { candidates, job, outcomes } from '../data/mockData';
+import { candidates, job, jobs, outcomes } from '../data/mockData';
 
 function cosineSimilarity(vec1, vec2) {
   const dotProduct = vec1.reduce((sum, a, i) => sum + a * vec2[i], 0);
@@ -15,7 +15,11 @@ function calculateScores(candidate, jobData, weights) {
   const semantic = cosineSimilarity(candidate.embedding_mock, jobData.embedding_mock);
   const requiredNames = jobData.required_skills.filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
   const candidateNames = candidate.skills.map(s => s.name.toLowerCase());
-  const matched = requiredNames.filter(name => candidateNames.includes(name)).length;
+  const skillMatches = (req, extracted) => {
+    const words = req.split(/\s+/).filter(w => w.length > 3);
+    return words.some(w => extracted.some(s => s.includes(w))) || extracted.some(s => s.includes(req));
+  };
+  const matched = requiredNames.filter(req => skillMatches(req, candidateNames)).length;
   const skillCoverage = requiredNames.length > 0 ? matched / requiredNames.length : 1.0;
   
   const verifiedScores = candidate.skills.filter(s => s.verified && s.verified_score !== null).map(s => s.verified_score);
@@ -38,6 +42,16 @@ function calculateScores(candidate, jobData, weights) {
   };
 }
 
+function timeAgo(isoString) {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const [selectedCandidate, setSelectedCandidate] = useState(null);
@@ -45,10 +59,23 @@ export default function Dashboard() {
   const [isRetraining, setIsRetraining] = useState(false);
   const [retrainMessage, setRetrainMessage] = useState("");
 
-  const matches = candidates.map(c => ({
-    ...c,
-    scores: calculateScores(c, job, weights)
-  })).sort((a, b) => parseFloat(b.scores.composite) - parseFloat(a.scores.composite));
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const liveApplications = JSON.parse(localStorage.getItem('careesOS_applications') || '[]');
+
+  const allCandidates = [
+    ...liveApplications,
+    ...candidates
+  ];
+
+  const matches = allCandidates.map(c => {
+    const jobData = c.jobId ? (jobs.find(j => j.id === c.jobId) || job) : job;
+    return { ...c, jobData, scores: calculateScores(c, jobData, weights) };
+  }).sort((a, b) => parseFloat(b.scores.composite) - parseFloat(a.scores.composite));
 
   const handleRetrain = (rating) => {
     setIsRetraining(true);
@@ -90,7 +117,7 @@ export default function Dashboard() {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
                   <div>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Reviewer View · Layer 1 & 2</span>
-                    <h2 className="font-display text-2xl text-text mt-1">{job.title} Applicants</h2>
+                    <h2 className="font-display text-2xl text-text mt-1">All Applicants</h2>
                     <p className="text-text-secondary text-sm mt-1">Ranked by dynamic composite score. Click a candidate to view AI-extracted evidence and verification status.</p>
                   </div>
 
@@ -108,7 +135,11 @@ export default function Dashboard() {
                             </div>
                             <div>
                               <div className="text-text font-medium">{match.name}</div>
-                              <div className="text-xs text-text-muted">ID: {match.id} · Applied 2 days ago</div>
+                              <div className="text-xs text-text-muted">
+                                {match.jobTitle && <span className="text-employer-accent/80 mr-2">{match.jobTitle}</span>}
+                                {match.submittedAt ? `Applied ${timeAgo(match.submittedAt)}` : 'Applied 2 days ago'}
+                                {match.email && <span className="text-accent/70"> · {match.email}</span>}
+                              </div>
                             </div>
                           </div>
                           <div className="text-right">
@@ -189,7 +220,14 @@ export default function Dashboard() {
                   <div className="flex items-start justify-between">
                     <div>
                       <h2 className="font-display text-3xl text-text">{selectedCandidate.name}</h2>
-                      <p className="text-text-secondary">Composite Score: <span className="text-accent font-display text-xl">{selectedCandidate.scores.composite}</span></p>
+                      {selectedCandidate.email && (
+                        <div className="flex gap-4 text-xs text-text-muted mt-1">
+                          <span>✉ {selectedCandidate.email}</span>
+                          {selectedCandidate.phone && <span>✆ {selectedCandidate.phone}</span>}
+                          {selectedCandidate.submittedAt && <span>Applied {timeAgo(selectedCandidate.submittedAt)}</span>}
+                        </div>
+                      )}
+                      <p className="text-text-secondary mt-1">Composite Score: <span className="text-accent font-display text-xl">{selectedCandidate.scores.composite}</span></p>
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-text-muted mb-1">Current Model Weights</div>
@@ -240,11 +278,11 @@ export default function Dashboard() {
                       <div className="space-y-4">
                         <div className="flex items-center justify-between pb-2 border-b border-accent/10">
                           <span className="text-text-secondary text-sm">Semantic Similarity</span>
-                          <span className="font-mono text-text">{selectedCandidate.scores.semanticRaw || selectedCandidate.scores.semantic} × {(weights.semantic * 100).toFixed(0)}% = <span className="text-accent">{selectedCandidate.scores.semantic}</span></span>
+                          <span className="font-mono text-text">{selectedCandidate.scores.semantic} × {(weights.semantic * 100).toFixed(0)}% = <span className="text-accent">{(parseFloat(selectedCandidate.scores.semantic) * weights.semantic).toFixed(3)}</span></span>
                         </div>
                         <div className="flex items-center justify-between pb-2 border-b border-accent/10">
                           <span className="text-text-secondary text-sm">Skill Coverage</span>
-                          <span className="font-mono text-text">{selectedCandidate.scores.skillCoverage} × {(weights.skill_coverage * 100).toFixed(0)}% = <span className="text-accent">{selectedCandidate.scores.skillCoverage}</span></span>
+                          <span className="font-mono text-text">{selectedCandidate.scores.skillCoverage} × {(weights.skill_coverage * 100).toFixed(0)}% = <span className="text-accent">{(parseFloat(selectedCandidate.scores.skillCoverage) * weights.skill_coverage).toFixed(3)}</span></span>
                         </div>
                         <div className="flex items-center justify-between pb-2 border-b border-accent/10">
                           <span className="text-text-secondary text-sm">Verification Score</span>
@@ -252,11 +290,46 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center justify-between pb-2 border-b border-accent/10">
                           <span className="text-text-secondary text-sm">Context Fit</span>
-                          <span className="font-mono text-text">{selectedCandidate.scores.contextFit} × {(weights.context_fit * 100).toFixed(0)}% = <span className="text-accent">{selectedCandidate.scores.contextFit}</span></span>
+                          <span className="font-mono text-text">{selectedCandidate.scores.contextFit} × {(weights.context_fit * 100).toFixed(0)}% = <span className="text-accent">{(parseFloat(selectedCandidate.scores.contextFit) * weights.context_fit).toFixed(3)}</span></span>
+                        </div>
+                        <div className="flex items-center justify-between pt-1 border-t border-accent/20">
+                          <span className="text-text-secondary text-sm font-medium">Composite</span>
+                          <span className="font-mono text-accent font-medium">{selectedCandidate.scores.composite}</span>
                         </div>
                       </div>
 
-                      <div className="mt-6 p-4 rounded bg-employer-surface border border-employer-accent/20">
+                      <div className="mt-4 p-4 rounded bg-bg/50 border border-accent/10">
+                        <h4 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-3">Reviewer Scoring Guide</h4>
+                        <div className="space-y-3 text-xs">
+                          <div>
+                            <div className="text-text-muted uppercase tracking-wider mb-1.5 text-[10px]">Composite Decision Thresholds</div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-success flex-shrink-0"></span><span className="text-text"><strong>0.75 – 1.00:</strong> Proceed to interview. Strong signal across multiple factors.</span></div>
+                              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-accent flex-shrink-0"></span><span className="text-text"><strong>0.60 – 0.74:</strong> Human review required. Check which factor is dragging the score.</span></div>
+                              <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-danger flex-shrink-0"></span><span className="text-text"><strong>&lt; 0.60:</strong> Likely reject. Significant gaps in skill, context, or evidence quality.</span></div>
+                            </div>
+                          </div>
+                          <div className="border-t border-accent/10 pt-3">
+                            <div className="text-text-muted uppercase tracking-wider mb-1.5 text-[10px]">What Each Factor Measures</div>
+                            <div className="space-y-1 text-text-secondary">
+                              <div><strong className="text-text">Semantic (40%):</strong> How closely the candidate's narrative aligns with the role's domain and language.</div>
+                              <div><strong className="text-text">Skill Coverage (25%):</strong> Proportion of non-negotiable required skills found in their extracted evidence.</div>
+                              <div><strong className="text-employer-accent">Verification (20%):</strong> Work sample assessment score — the only independently tested signal. A low score here means claims are unverified.</div>
+                              <div><strong className="text-text">Context Fit (15%):</strong> Match between candidate's preferred working style and the team's structure and pace.</div>
+                            </div>
+                          </div>
+                          <div className="border-t border-accent/10 pt-3">
+                            <div className="text-text-muted uppercase tracking-wider mb-1.5 text-[10px]">Red Flag Signals</div>
+                            <div className="space-y-1 text-text-secondary">
+                              <div><strong className="text-danger">High semantic + low verification:</strong> Candidate may be keyword-optimising. Prioritise work sample score.</div>
+                              <div><strong className="text-danger">High verification + low skill coverage:</strong> Strong performer but skills don't map to this role specifically.</div>
+                              <div><strong className="text-accent">Low context fit:</strong> May underperform regardless of skill — worth probing in interview.</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 p-4 rounded bg-employer-surface border border-employer-accent/20">
                         <h4 className="text-sm font-medium text-employer-accent mb-2">Reviewer Actions</h4>
                         <div className="flex gap-2">
                           <button className="flex-1 py-2 rounded bg-employer-accent text-bg text-sm font-medium hover:opacity-90">Shortlist for Interview</button>
