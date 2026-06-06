@@ -55,7 +55,7 @@ export default function UserJourney() {
           soft_signals: result.data.soft_signals || {},
           red_flags: result.data.red_flags || []
         });
-        setStep(3);
+        setStep(4);
       } else {
         alert("Failed to extract profile. Please try again.");
       }
@@ -205,11 +205,52 @@ export default function UserJourney() {
                 </motion.div>
               )}
 
-              {/* STEP 2: Guided Questionnaire */}
-              {step === 2 && (
+              {/* STEP 2: Job Detail */}
+              {step === 2 && selectedJob && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                  <button onClick={() => setStep(1)} className="text-xs text-accent hover:text-accent-hover transition-colors flex items-center gap-1">← Back to all roles</button>
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">{selectedJob.department} · {selectedJob.type}</span>
+                    <h2 className="font-display text-3xl text-text mt-1">{selectedJob.title}</h2>
+                  </div>
+
+                  <div className="p-5 rounded-lg bg-surface border border-accent/10 space-y-4">
+                    <div>
+                      <h3 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-2">About the Role</h3>
+                      <p className="text-text-secondary text-sm leading-relaxed">{selectedJob.description}</p>
+                    </div>
+                    <div className="border-t border-accent/10 pt-4">
+                      <h3 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-3">Requirements</h3>
+                      <ul className="space-y-2">
+                        {selectedJob.requirements.map((r, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm text-text-secondary">
+                            <span className="text-accent mt-0.5 flex-shrink-0">→</span>{r}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="border-t border-accent/10 pt-4">
+                      <h3 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-2">About the Company</h3>
+                      <p className="text-text-secondary text-sm leading-relaxed">{selectedJob.about_company}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-employer-surface border border-employer-accent/20 text-sm text-text-secondary">
+                    <span className="text-employer-accent font-medium">How this application works: </span>
+                    You will answer 6 narrative questions, complete a short work sample task, and our AI will build a verified skills profile — no keyword-matching against your resume.
+                  </div>
+
+                  <button onClick={() => setStep(3)} className="w-full py-4 rounded-lg bg-accent text-bg font-medium text-base hover:bg-accent-hover transition-colors">
+                    Apply for {selectedJob.title} →
+                  </button>
+                </motion.div>
+              )}
+
+              {/* STEP 3: Guided Questionnaire */}
+              {step === 3 && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                   <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 2 · Candidate Profile Pipeline</span>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 3 · Candidate Profile Pipeline</span>
                     <h2 className="font-display text-2xl text-text mt-1">Guided Narrative Questionnaire</h2>
                     <p className="text-text-secondary text-sm mt-1">Answer these 6 open-ended questions for the <strong className="text-accent">{selectedJob?.title}</strong> role. Our AI evaluates your narrative to extract real evidence, preventing keyword stuffing.</p>
                   </div>
@@ -278,11 +319,11 @@ export default function UserJourney() {
                 </motion.div>
               )}
 
-              {/* STEP 3: LLM Extracted Profile Review */}
-              {step === 3 && profile && (
+              {/* STEP 4: LLM Extracted Profile Review */}
+              {step === 4 && profile && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                   <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-success">Step 3 Complete · LLM Extraction Successful</span>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-success">Step 4 Complete · LLM Extraction Successful</span>
                     <h2 className="font-display text-2xl text-text mt-1">Your Structured Profile</h2>
                     <p className="text-text-secondary text-sm mt-1">This is exactly what the hiring system sees. No keywords were stuffed; only evidence-based claims were extracted.</p>
                   </div>
@@ -317,14 +358,14 @@ export default function UserJourney() {
                     </div>
                   </div>
 
-                  <button onClick={() => setStep(4)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
+                  <button onClick={() => setStep(5)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
                     Proceed to Skill Verification (Layer 2) →
                   </button>
                 </motion.div>
               )}
 
-              {/* STEP 4: Skill Verification */}
-              {step === 4 && profile && (
+              {/* STEP 5: Skill Verification */}
+              {step === 5 && profile && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                   <div>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-employer-accent">Layer 2 · Skill Verification</span>
@@ -400,7 +441,7 @@ export default function UserJourney() {
                         ))}
                       </div>
 
-                      <button onClick={() => setStep(5)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
+                      <button onClick={() => setStep(6)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
                         View Matching Calculation (Layer 1+2) →
                       </button>
                     </div>
@@ -408,8 +449,8 @@ export default function UserJourney() {
                 </motion.div>
               )}
 
-              {/* STEP 5: Matching Calculation */}
-              {step === 5 && matchScore && (
+              {/* STEP 6: Matching Calculation */}
+              {step === 6 && matchScore && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                   <div>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Layer 1+2 · Composite Match Score</span>
@@ -487,17 +528,18 @@ export default function UserJourney() {
                     </div>
                   </div>
 
-                  <button onClick={() => setStep(6)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
+                  <button onClick={() => setStep(7)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
                     Continue to Submit →
                   </button>
                 </motion.div>
               )}
 
-              {/* STEP 6: Contact Info */}
-              {step === 6 && (
+              {/* STEP 7: Contact Info */}
+              {step === 7 && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                   <div>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Final Step · Contact Details</span>
+
                     <h2 className="font-display text-2xl text-text mt-1">Your Contact Information</h2>
                     <p className="text-text-secondary text-sm mt-1">This is only shared with the hiring team if you are shortlisted. It is not used in AI scoring.</p>
                   </div>
@@ -562,7 +604,7 @@ export default function UserJourney() {
                       };
                       const existing = JSON.parse(localStorage.getItem('careesOS_applications') || '[]');
                       localStorage.setItem('careesOS_applications', JSON.stringify([...existing, application]));
-                      setStep(7);
+                      setStep(8);
                     }}
                     className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -571,8 +613,8 @@ export default function UserJourney() {
                 </motion.div>
               )}
 
-              {/* STEP 7: Application Submitted (End of Applicant Journey) */}
-              {step === 7 && (
+              {/* STEP 8: Application Submitted (End of Applicant Journey) */}
+              {step === 8 && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 text-center py-12">
                   <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
                     <span className="text-4xl">✓</span>

@@ -65,6 +65,15 @@ export const jobs = [
       { id: "q5", label: "5. Failure & Learning", question: "Tell me about a system or infrastructure change you made that failed or caused an incident. What happened, and what did you do about it?" },
       { id: "q6", label: "6. Domain Approach", question: "Walk me through how you approach reliability and security hardening for a new cloud-native system." }
     ],
+    description: "We are looking for a Senior Platform Engineer to own and evolve our cloud infrastructure. You will lead the design and operation of our Kubernetes-based platform, define reliability standards, and work closely with product engineering teams to enable fast, safe deployments.",
+    requirements: [
+      "5+ years in platform, infrastructure, or site reliability engineering",
+      "Expert-level Kubernetes — production cluster management, not just deployment",
+      "Strong Python for tooling, automation, and internal developer tooling",
+      "Experience with cloud security, IAM, and least-privilege access design",
+      "Comfort owning on-call rotations and postmortem processes"
+    ],
+    about_company: "CareerOS is building the next generation of talent infrastructure. We are a team of 40, Series A, operating across Southeast Asia. Engineering culture is high-autonomy, high-ownership — you ship directly to production and own what you build.",
     work_sample_task: "Task: EKS IAM Policy Audit & Optimization\nThe candidate must: (1) identify the security flaw in a policy granting s3:* on *, (2) write a corrected least-privilege IAM policy, (3) explain their reasoning and any edge cases.",
     work_sample: {
       title: "Task: EKS IAM Policy Audit & Optimization",
@@ -99,6 +108,15 @@ export const jobs = [
       { id: "q5", label: "5. When a Policy Failed", question: "Tell me about a time an HR policy, process, or programme you led underperformed or backfired. What happened and what did you learn?" },
       { id: "q6", label: "6. Approach to Talent Strategy", question: "Walk me through how you approach building a talent pipeline and retention strategy for a fast-growing team." }
     ],
+    description: "We are hiring an HR Business Partner to support two of our fastest-growing departments. You will be the first dedicated HRBP at CareerOS — responsible for employee relations, manager coaching, talent planning, and building people processes that scale from 40 to 150 staff over the next 18 months.",
+    requirements: [
+      "4+ years as an HR Business Partner or Senior HR Generalist",
+      "Proven experience handling complex employee relations cases independently",
+      "Experience designing performance management or compensation frameworks",
+      "Comfortable influencing senior managers without direct authority",
+      "Experience in high-growth startups or tech companies preferred"
+    ],
+    about_company: "CareerOS is building the next generation of talent infrastructure. We are a team of 40, Series A, operating across Southeast Asia. We are at an inflection point — scaling from startup to structured organisation — and this role will shape how we grow.",
     work_sample_task: "Task: Employee Retention Analysis\nA department has 35% turnover in 6 months. The candidate must: (1) identify the top 3 likely root causes based on common HR patterns, (2) propose a 90-day action plan with specific interventions, (3) explain how they would measure success.",
     work_sample: {
       title: "Task: Employee Retention Analysis",
@@ -133,6 +151,15 @@ export const jobs = [
       { id: "q5", label: "5. When Operations Broke Down", question: "Tell me about a time an operational process or project you were responsible for went off the rails. What happened and what did you do?" },
       { id: "q6", label: "6. Approach to Efficiency", question: "Walk me through how you would audit and improve a team's day-to-day operational workflows when joining a new organisation." }
     ],
+    description: "We are looking for an Operations Administrator to keep CareerOS running smoothly as we scale. You will own vendor management, cross-functional coordination, internal process documentation, and be the connective tissue between teams when nothing else exists.",
+    requirements: [
+      "2+ years in an operations, office management, or project coordination role",
+      "Track record of identifying and improving broken processes without being asked",
+      "Strong written communication — you document things so others can follow",
+      "Experience coordinating across 4+ teams or departments simultaneously",
+      "Proficiency with productivity tools: Notion, Slack, Google Workspace, or equivalent"
+    ],
+    about_company: "CareerOS is building the next generation of talent infrastructure. We are a team of 40, Series A, operating across Southeast Asia. Operations here means building the scaffolding for a company that is growing fast — you will have real ownership and visibility from day one.",
     work_sample_task: "Task: Operations Process Audit\nThe candidate must: (1) identify 3 inefficiencies in a fictional onboarding process that takes 6 weeks and involves 8 teams, (2) propose specific fixes with owners and timelines, (3) explain how they would get buy-in from resistant stakeholders.",
     work_sample: {
       title: "Task: Operations Process Audit",
