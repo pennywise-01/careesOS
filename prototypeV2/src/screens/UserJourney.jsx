@@ -2,16 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Sidebar from '../components/Sidebar';
-
-const targetJob = {
-  id: "j1",
-  title: "Senior Platform Engineer",
-  required_skills: [
-    { name: "Kubernetes", level: "senior", non_negotiable: true },
-    { name: "Python", level: "senior", non_negotiable: true }
-  ],
-  team_context: { size: 8, pace: "balanced", autonomy_offered: "high" }
-};
+import { job as targetJob } from '../data/mockData';
 
 const questionnaire = [
   { id: "q1", label: "1. Proudest Work", question: "Tell me about a piece of work you're most proud of. What was the problem? What did you specifically do — not your team, you? What changed as a result?" },
@@ -30,6 +21,7 @@ export default function UserJourney() {
   // Application State
   const [answers, setAnswers] = useState({});
   const [resumeFile, setResumeFile] = useState(null);
+  const [assessmentAnswer, setAssessmentAnswer] = useState('');
   
   // Backend/AI State
   const [profile, setProfile] = useState(null);
@@ -55,7 +47,7 @@ export default function UserJourney() {
     setProcessingLog("Sending narrative to DeepSeek LLM for structured extraction...");
 
     try {
-      const response = await fetch('http://localhost:3001/api/extract-profile', {
+      const response = await fetch('/api/extract-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ answers })
@@ -77,43 +69,50 @@ export default function UserJourney() {
       }
     } catch (error) {
       console.error("Backend API Error:", error);
-      alert("Error calling backend. Make sure the server is running on port 3001.");
+      alert("Error calling backend. Please try again.");
     } finally {
       setIsProcessing(false);
     }
   };
 
   // Step 4: Skill Verification
-  const handleAssessmentSubmit = () => {
+  const handleAssessmentSubmit = async () => {
     setIsProcessing(true);
-    setProcessingLog("1/4: Parsing submission and running plagiarism check...");
-    
-    setTimeout(() => {
-      setProcessingLog("2/4: Evaluating technical accuracy and code quality...");
-      setTimeout(() => {
-        setProcessingLog("3/4: Grading communication and approach...");
-        setTimeout(() => {
-          setProcessingLog("4/4: Normalizing score against candidate cohort...");
-          setTimeout(() => {
-            const newAssessment = {
-              task_completion: 0.90,
-              technical_accuracy: 0.85,
-              work_quality: 0.88,
-              communication: 0.82,
-              raw_score: 0.86,
-              normalised_score: 0.88
-            };
-            setAssessment(newAssessment);
-            setProfile(prev => ({
-              ...prev,
-              skills: prev.skills.map(s => ({ ...s, verified: true, verified_score: newAssessment.normalised_score }))
-            }));
-            setProcessingLog("Verification complete. Profile updated.");
-            setIsProcessing(false);
-          }, 800);
-        }, 800);
-      }, 800);
-    }, 800);
+    setProcessingLog("Sending submission to DeepSeek for grading...");
+    try {
+      const task = `Task: EKS IAM Policy Audit & Optimization\nThe candidate must: (1) identify the security flaw in a policy granting s3:* on *, (2) write a corrected least-privilege IAM policy, (3) explain their reasoning and edge cases.`;
+      const response = await fetch('/api/grade-assessment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer: assessmentAnswer, task })
+      });
+      const result = await response.json();
+      if (result.success && result.data) {
+        const g = result.data;
+        const newAssessment = {
+          task_completion: g.task_completion,
+          technical_accuracy: g.technical_accuracy,
+          work_quality: g.work_quality,
+          communication: g.communication,
+          raw_score: ((g.task_completion + g.technical_accuracy + g.work_quality + g.communication) / 4),
+          normalised_score: g.normalised_score,
+          feedback: g.feedback
+        };
+        setAssessment(newAssessment);
+        setProfile(prev => ({
+          ...prev,
+          skills: prev.skills.map(s => ({ ...s, verified: true, verified_score: g.normalised_score }))
+        }));
+        setProcessingLog("Grading complete. Profile updated.");
+      } else {
+        alert("Failed to grade assessment. Please try again.");
+      }
+    } catch (error) {
+      console.error('Assessment grading error:', error);
+      alert("Error grading assessment. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Step 5: Dynamic Matching Calculation
@@ -357,6 +356,8 @@ export default function UserJourney() {
                           <textarea 
                             className="w-full h-40 bg-bg border border-accent/20 rounded-lg p-3 text-text text-sm font-mono focus:outline-none focus:border-employer-accent transition-colors"
                             placeholder="1. Flaw identified: ...&#10;2. Corrected policy: ...&#10;3. Reasoning: ..."
+                            value={assessmentAnswer}
+                            onChange={(e) => setAssessmentAnswer(e.target.value)}
                           ></textarea>
                         </div>
                       </div>
@@ -381,6 +382,7 @@ export default function UserJourney() {
                       </div>
                       <div className="p-3 rounded bg-success/10 border border-success/30 text-center">
                         <div className="text-xs text-success font-medium uppercase tracking-wider">Normalised Score: {(assessment.normalised_score * 100).toFixed(0)}th Percentile</div>
+                        {assessment.feedback && <div className="text-xs text-text-secondary mt-1 italic">"{assessment.feedback}"</div>}
                       </div>
                       
                       <div className="p-3 rounded bg-bg/50 border border-success/20">
@@ -403,8 +405,93 @@ export default function UserJourney() {
                 </motion.div>
               )}
 
-              {/* STEP 5: Application Submitted (End of Applicant Journey) */}
-              {step === 5 && (
+              {/* STEP 5: Matching Calculation */}
+              {step === 5 && matchScore && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                  <div>
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Layer 1+2 · Composite Match Score</span>
+                    <h2 className="font-display text-2xl text-text mt-1">Matching Calculation</h2>
+                    <p className="text-text-secondary text-sm mt-1">Here is how your profile scores against the role requirements before you submit.</p>
+                  </div>
+
+                  <div className="p-5 rounded-lg bg-surface border border-accent/10 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 rounded bg-bg/50 border border-accent/5 space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-text-muted">Semantic Match</span>
+                          <span className="font-mono text-xs text-accent">×{weights.semantic}</span>
+                        </div>
+                        <div className="text-lg font-mono text-text">{(matchScore.semanticRaw * 100).toFixed(0)}%</div>
+                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-accent">{matchScore.semantic}</span></div>
+                      </div>
+                      <div className="p-3 rounded bg-bg/50 border border-accent/5 space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-text-muted">Skill Coverage</span>
+                          <span className="font-mono text-xs text-accent">×{weights.skill_coverage}</span>
+                        </div>
+                        <div className="text-lg font-mono text-text">{(matchScore.skillCoverageRaw * 100).toFixed(0)}%</div>
+                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-accent">{matchScore.skillCoverage}</span></div>
+                      </div>
+                      <div className="p-3 rounded bg-bg/50 border border-employer-accent/20 space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-text-muted">Verification Score</span>
+                          <span className="font-mono text-xs text-employer-accent">×{weights.verification}</span>
+                        </div>
+                        <div className="text-lg font-mono text-text">{(matchScore.verificationRaw * 100).toFixed(0)}%</div>
+                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-employer-accent">{matchScore.verification}</span></div>
+                      </div>
+                      <div className="p-3 rounded bg-bg/50 border border-accent/5 space-y-1">
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-text-muted">Context Fit</span>
+                          <span className="font-mono text-xs text-accent">×{weights.context_fit}</span>
+                        </div>
+                        <div className="text-lg font-mono text-text">{(matchScore.contextFitRaw * 100).toFixed(0)}%</div>
+                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-accent">{matchScore.contextFit}</span></div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 rounded bg-success/10 border border-success/30 text-center">
+                      <div className="text-[10px] text-success font-mono uppercase tracking-wider mb-1">Composite Score</div>
+                      <div className="font-display text-4xl text-success">{matchScore.composite}</div>
+                      <div className="text-xs text-text-secondary mt-1">
+                        {parseFloat(matchScore.composite) >= 0.75 ? '✓ Strong Match — Fast-track to interview' :
+                         parseFloat(matchScore.composite) >= 0.60 ? '~ Marginal — Manual review required' :
+                         '✗ Significant gaps detected'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-lg bg-surface border border-accent/10">
+                    <h3 className="font-mono text-xs uppercase tracking-wider text-accent mb-3">How Your Application is Evaluated</h3>
+                    <div className="grid md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <div className="font-medium text-text mb-1">What the AI Looks For:</div>
+                        <ul className="list-disc list-inside text-text-secondary space-y-1 text-xs">
+                          <li><strong className="text-text">Concrete Evidence:</strong> Verbatim quotes of what you actually built or solved.</li>
+                          <li><strong className="text-text">Work Context:</strong> Team size, pace, and autonomy preferences.</li>
+                          <li><strong className="text-text">Career Goals:</strong> Direction you're heading and what you want to avoid.</li>
+                          <li><strong className="text-danger">Red Flags:</strong> Vague answers, keyword stuffing, or inconsistencies.</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <div className="font-medium text-text mb-1">Composite Score Ranges:</div>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-success"></span><span className="text-text"><strong>0.75 – 1.00 (Strong):</strong> Fast-track to interview.</span></div>
+                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-accent"></span><span className="text-text"><strong>0.60 – 0.74 (Marginal):</strong> Manual review or assessment required.</span></div>
+                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-danger"></span><span className="text-text"><strong>&lt; 0.60 (Reject):</strong> Significant skill or context gaps.</span></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button onClick={() => setStep(6)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
+                    Submit Application →
+                  </button>
+                </motion.div>
+              )}
+
+              {/* STEP 6: Application Submitted (End of Applicant Journey) */}
+              {step === 6 && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 text-center py-12">
                   <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
                     <span className="text-4xl">✓</span>
