@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import Sidebar from '../components/Sidebar';
 import { jobs } from '../data/mockData';
 
 export default function UserJourney() {
@@ -163,9 +162,6 @@ export default function UserJourney() {
   return (
     <div className="h-screen flex flex-col">
       <header className="flex items-center justify-between px-5 py-3 border-b border-accent/10 flex-shrink-0 bg-surface/30">
-        <button onClick={() => navigate('/dashboard')} className="text-xs text-accent hover:text-accent-hover transition-colors">
-          ← Back to Dashboard
-        </button>
         <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">[T] Career OS V2 · Comprehensive Journey</span>
         <button onClick={() => navigate('/reviewer')} className="text-sm font-medium px-4 py-2 rounded-lg bg-employer-accent text-bg hover:opacity-90 transition-colors">
           Reviewer Dashboard →
@@ -173,7 +169,6 @@ export default function UserJourney() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
         <div className="flex-1 overflow-y-auto bg-bg p-6">
           <div className="max-w-4xl mx-auto">
             
