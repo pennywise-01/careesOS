@@ -230,7 +230,19 @@ export default function UserJourney() {
                               <p className="text-xs text-text-muted mt-2 italic">Quick apply — resume + {j.generic_questions?.length || 0} screening questions</p>
                             )}
                           </div>
-                          <span className="text-accent text-xl group-hover:translate-x-1 transition-transform ml-4">→</span>
+                          <div className="flex flex-col items-end gap-2 ml-4 flex-shrink-0">
+                            {j.mock_match != null && (
+                              <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg border ${
+                                j.mock_match >= 75 ? 'bg-success/10 border-success/30 text-success' :
+                                j.mock_match >= 50 ? 'bg-accent/10 border-accent/30 text-accent' :
+                                'bg-elevated border-highlight text-text-muted'
+                              }`}>
+                                <span className="text-lg font-bold leading-none">{j.mock_match}%</span>
+                                <span className="text-[9px] font-mono uppercase tracking-wider opacity-80">match</span>
+                              </div>
+                            )}
+                            <span className="text-accent text-xl group-hover:translate-x-1 transition-transform">→</span>
+                          </div>
                         </div>
                       </div>
                     ))}

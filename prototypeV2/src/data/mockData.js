@@ -139,6 +139,7 @@ export const jobs = [
     ],
     team_context: { size: 8, pace: "balanced", autonomy_offered: "high" },
     embedding_mock: [0.15, 0.85, 0.35, 0.88],
+    mock_match: 78,
     questionnaire: [
       { id: "q1", label: "1. Proudest Work", question: "Tell me about a piece of engineering work you're most proud of. What was the problem? What did you specifically do — not your team, you? What changed as a result?" },
       { id: "q2", label: "2. Technical Complexity", question: "Describe the most technically complex system you've built or debugged. Walk me through your approach." },
@@ -183,6 +184,7 @@ export const jobs = [
     ],
     team_context: { size: 5, pace: "balanced", autonomy_offered: "medium" },
     embedding_mock: [0.20, 0.60, 0.40, 0.70],
+    mock_match: 62,
     questionnaire: [
       { id: "q1", label: "1. Proudest HR Initiative", question: "Tell me about an HR initiative or program you're most proud of driving. What was the business problem? What specifically did you design or implement? What changed as a result?" },
       { id: "q2", label: "2. Difficult Employee Situation", question: "Describe the most complex or sensitive employee relations case you've handled. Walk me through how you approached it and the outcome." },
@@ -227,6 +229,7 @@ export const jobs = [
     ],
     team_context: { size: 12, pace: "execution-focused", autonomy_offered: "medium" },
     embedding_mock: [0.18, 0.55, 0.30, 0.65],
+    mock_match: 85,
     questionnaire: [
       { id: "q1", label: "1. Process You Improved", question: "Tell me about an operational process you improved or built from scratch. What was broken or missing? What exactly did you change? What was the measurable outcome?" },
       { id: "q2", label: "2. Most Complex Coordination", question: "Describe the most complex cross-functional or multi-stakeholder project you've managed. How did you keep it on track?" },
@@ -269,6 +272,7 @@ export const normalJobs = [
     premium: false,
     department: "Customer Experience",
     type: "Full-time · On-site",
+    mock_match: 45,
     description: "We are looking for a friendly and reliable Customer Service Executive to handle inbound enquiries, resolve customer issues, and maintain high satisfaction scores across our support channels.",
     requirements: [
       "Minimum 1 year in a customer-facing role",
@@ -285,6 +289,7 @@ export const normalJobs = [
     premium: false,
     department: "Marketing",
     type: "Full-time · Hybrid",
+    mock_match: 58,
     description: "We need a Marketing Coordinator to support campaign execution, manage social media calendars, coordinate with vendors, and track campaign performance metrics across digital and offline channels.",
     requirements: [
       "Diploma or Degree in Marketing, Communications, or related field",
