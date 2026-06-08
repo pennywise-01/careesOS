@@ -261,6 +261,52 @@ export const jobs = [
       artifact_type: "text",
       placeholder: "1. Inefficiency #1: ...\n   Fix: ...\n   Owner: ...\n   Timeline: ...\n\n2. Inefficiency #2: ...\n\n3. Inefficiency #3: ...\n\nStakeholder buy-in approach: ..."
     }
+  },
+  {
+    id: "j4",
+    title: "Site Reliability Engineer",
+    premium: true,
+    department: "Infrastructure & Reliability",
+    type: "Full-time · Remote",
+    required_skills: [
+      { name: "Linux", level: "senior", non_negotiable: true },
+      { name: "Kubernetes", level: "mid", non_negotiable: true },
+      { name: "Terraform", level: "mid", non_negotiable: true }
+    ],
+    team_context: { size: 6, pace: "execution-focused", autonomy_offered: "high" },
+    embedding_mock: [0.12, 0.88, 0.40, 0.82],
+    mock_match: 80,
+    questionnaire: [
+      { id: "q1", label: "1. Proudest Reliability Work", question: "Tell me about a reliability improvement you led. What broke, what did you build, and what changed?" },
+      { id: "q2", label: "2. Incident You Owned", question: "Describe the most complex incident you have managed end-to-end. Walk through your response and the postmortem." },
+      { id: "q3", label: "3. Work Environment", question: "What kind of engineering environment brings out your best SRE work? Think about on-call culture, autonomy, and tooling." },
+      { id: "q4", label: "4. Career Trajectory", question: "Where are you taking your SRE or infrastructure career in the next 2 years?" },
+      { id: "q5", label: "5. When Something Broke", question: "Tell me about a change you made that caused an outage or degradation. What happened and what did you do?" },
+      { id: "q6", label: "6. Observability Approach", question: "Walk me through how you would set up observability for a new microservice hitting production for the first time." }
+    ],
+    description: "We are hiring a Site Reliability Engineer to own the reliability and scalability of our production infrastructure. You will manage Kubernetes clusters on AWS, define SLOs, drive incident response, and build internal tooling that improves platform stability across all engineering teams.",
+    requirements: [
+      "4+ years in SRE, infrastructure, or platform engineering roles",
+      "Deep Linux administration and troubleshooting skills",
+      "Production Kubernetes experience — cluster lifecycle, networking, autoscaling",
+      "Infrastructure-as-code with Terraform in multi-environment setups",
+      "Experience defining and owning SLOs, error budgets, and runbooks"
+    ],
+    about_company: "FinOps Sdn Bhd is a B2B SaaS company serving 200+ enterprise clients across Southeast Asia. Uptime is our product — our SRE team directly impacts customer trust and revenue.",
+    work_sample_task: "Task: SLO Definition & Alert Design\nGiven a payment processing microservice, define meaningful SLOs, write a Prometheus alerting rule, and explain your error budget policy.",
+    work_sample: {
+      title: "Task: SLO Definition & Alert Design",
+      time_limit: "40 min",
+      context: "A payment processing microservice has been running in production for 3 months with no formal SLOs. P99 latency is currently 320ms. Error rate is 0.3%. The business requires 99.9% availability.",
+      steps: [
+        "Define 3 meaningful SLOs for this service with specific targets.",
+        "Write a Prometheus alerting rule (PromQL) for one of your SLOs.",
+        "Explain your error budget policy and when you would freeze deployments."
+      ],
+      artifact: "Service: payment-processor\nCurrent P99 latency: 320ms\nCurrent error rate: 0.3%\nRequired availability: 99.9%\nDeployment frequency: 8x per week",
+      artifact_type: "text",
+      placeholder: "1. SLOs defined:\n   - Availability SLO: ...\n   - Latency SLO: ...\n   - Error rate SLO: ...\n\n2. Prometheus alert rule:\n...\n\n3. Error budget policy: ..."
+    }
   }
 ];
 
@@ -299,6 +345,133 @@ export const normalJobs = [
     ],
     about_company: "BrandSpace Agency is a boutique marketing agency working with regional consumer brands. We offer a fast-paced, collaborative environment with exposure to diverse client portfolios.",
     generic_questions: ["gq_salary", "gq_relocate", "gq_experience", "gq_status", "gq_arrangement", "gq_education", "gq_industry", "gq_languages"]
+  },
+  {
+    id: "nj3",
+    title: "DevOps Engineer",
+    premium: false,
+    department: "Engineering",
+    type: "Full-time · Hybrid",
+    required_skills: [
+      { name: "Docker", level: "mid", non_negotiable: true },
+      { name: "CI/CD", level: "mid", non_negotiable: true },
+      { name: "Linux", level: "mid", non_negotiable: true }
+    ],
+    mock_match: 72,
+    description: "We are looking for a DevOps Engineer to manage our CI/CD pipelines, containerised workloads, and cloud deployment processes. You will work closely with software engineering teams to automate build, test, and release workflows across AWS-hosted environments.",
+    requirements: [
+      "2+ years in a DevOps or infrastructure role",
+      "Hands-on Docker and container orchestration experience",
+      "CI/CD pipeline ownership — Jenkins, GitHub Actions, or GitLab CI",
+      "Linux system administration and shell scripting",
+      "Familiarity with cloud platforms (AWS, GCP, or Azure)"
+    ],
+    about_company: "TechFlow Sdn Bhd is a product-led software company building logistics management tools for Southeast Asian enterprises. Engineering team of 25, growing to 50 by end of year.",
+    generic_questions: ["gq_salary", "gq_experience", "gq_startdate", "gq_notice", "gq_portfolio"]
+  },
+  {
+    id: "nj4",
+    title: "Cloud Infrastructure Engineer",
+    premium: false,
+    department: "Cloud & Infrastructure",
+    type: "Full-time · Remote",
+    required_skills: [
+      { name: "AWS", level: "mid", non_negotiable: true },
+      { name: "Terraform", level: "mid", non_negotiable: true }
+    ],
+    mock_match: 68,
+    description: "We are hiring a Cloud Infrastructure Engineer to design, deploy, and maintain our AWS-based cloud infrastructure. You will manage environments using Terraform, enforce cloud security best practices, and work with engineering teams to optimise cost and performance.",
+    requirements: [
+      "3+ years working with AWS infrastructure",
+      "Terraform for infrastructure-as-code at scale",
+      "Understanding of VPC networking, IAM, and cloud security",
+      "Experience with cloud cost optimisation and tagging strategies",
+      "Scripting ability in Python or Bash"
+    ],
+    about_company: "CloudBase Technologies is a cloud consulting firm helping mid-market companies in Malaysia migrate and modernise their infrastructure. We are a remote-first team of 30 engineers.",
+    generic_questions: ["gq_salary", "gq_experience", "gq_startdate", "gq_portfolio", "gq_relocate"]
+  },
+  {
+    id: "nj5",
+    title: "Data Analyst",
+    premium: false,
+    department: "Data & Analytics",
+    type: "Full-time · Hybrid",
+    required_skills: [
+      { name: "SQL", level: "mid", non_negotiable: true },
+      { name: "Python", level: "junior", non_negotiable: false },
+      { name: "Data Visualisation", level: "mid", non_negotiable: true }
+    ],
+    mock_match: 55,
+    description: "We are looking for a Data Analyst to transform business data into actionable insights. You will query production databases, build dashboards, and work with product and operations teams to define and track key metrics.",
+    requirements: [
+      "2+ years in a data analyst or business intelligence role",
+      "Strong SQL — complex joins, window functions, query optimisation",
+      "Experience with BI tools: Tableau, Power BI, Looker, or Metabase",
+      "Python for data wrangling is a plus",
+      "Ability to translate data findings into business recommendations"
+    ],
+    about_company: "Datasphere Analytics is a data consultancy serving e-commerce and fintech clients across Southeast Asia. We run lean, embedded analyst teams inside our clients' product organisations.",
+    generic_questions: ["gq_salary", "gq_experience", "gq_education", "gq_startdate", "gq_portfolio"]
+  },
+  {
+    id: "nj6",
+    title: "Full Stack Developer",
+    premium: false,
+    department: "Product Engineering",
+    type: "Full-time · Hybrid",
+    required_skills: [
+      { name: "React", level: "mid", non_negotiable: true },
+      { name: "Node.js", level: "mid", non_negotiable: true },
+      { name: "PostgreSQL", level: "junior", non_negotiable: false }
+    ],
+    mock_match: 60,
+    description: "We are hiring a Full Stack Developer to build and maintain web applications across the full product stack. You will own features end-to-end — from React frontends to Node.js APIs and PostgreSQL databases.",
+    requirements: [
+      "2+ years building production web applications",
+      "React for frontend, Node.js or Express for backend",
+      "Relational databases — PostgreSQL or MySQL",
+      "Git-based workflows, code review culture",
+      "REST or GraphQL API design experience"
+    ],
+    about_company: "BuildFast Studio is a venture-backed product studio in Kuala Lumpur building SaaS tools for the SME market. We move fast, ship often, and give engineers direct product ownership.",
+    generic_questions: ["gq_salary", "gq_experience", "gq_startdate", "gq_portfolio", "gq_notice"]
+  },
+  {
+    id: "nj7",
+    title: "Talent Acquisition Specialist",
+    premium: false,
+    department: "People & Culture",
+    type: "Full-time · On-site",
+    mock_match: 50,
+    description: "We are hiring a Talent Acquisition Specialist to manage end-to-end recruitment across technical and non-technical roles. You will own job briefings, sourcing, candidate experience, and offer management.",
+    requirements: [
+      "2+ years in talent acquisition or technical recruiting",
+      "Experience sourcing passive candidates via LinkedIn and other channels",
+      "Strong candidate communication and interview coordination skills",
+      "Familiarity with ATS platforms (Workday, Greenhouse, or similar)",
+      "Ability to manage 10–15 open roles simultaneously"
+    ],
+    about_company: "GrowthHire is a regional recruitment agency specialising in placing tech and operations professionals across Malaysia, Singapore, and Indonesia.",
+    generic_questions: ["gq_salary", "gq_experience", "gq_startdate", "gq_notice", "gq_availability"]
+  },
+  {
+    id: "nj8",
+    title: "Finance Executive",
+    premium: false,
+    department: "Finance",
+    type: "Full-time · On-site",
+    mock_match: 42,
+    description: "We are looking for a Finance Executive to support day-to-day accounting operations including AP/AR processing, month-end close, and financial reporting. You will work alongside the Finance Manager to ensure accurate and timely books.",
+    requirements: [
+      "Diploma or Degree in Accounting, Finance, or related field",
+      "1–3 years of accounting or finance experience",
+      "Proficiency in accounting software (SQL, AutoCount, or Xero)",
+      "Understanding of Malaysian tax compliance and GST/SST",
+      "Detail-oriented with strong numerical accuracy"
+    ],
+    about_company: "PrimeLedger Sdn Bhd is a shared services company providing finance and accounting support to a portfolio of SMEs across Malaysia.",
+    generic_questions: ["gq_salary", "gq_experience", "gq_education", "gq_startdate", "gq_notice"]
   }
 ];
 

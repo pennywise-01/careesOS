@@ -13,6 +13,25 @@ function timeAgo(isoString) {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+function filterJobsByRole(jobs, roleInput) {
+  const words = roleInput.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+  if (words.length === 0) return jobs;
+  const scored = jobs.map(j => {
+    // Primary: exact token match in title + department only
+    const titleDeptTokens = `${j.title} ${j.department || ''}`.toLowerCase().split(/\W+/).filter(Boolean);
+    const titleMatched = words.filter(w => titleDeptTokens.some(t => t === w || t.startsWith(w))).length;
+    // Secondary: loose match in description/requirements (tiebreaker only, not a gate)
+    const descText = `${j.description || ''} ${(j.requirements || []).join(' ')}`.toLowerCase();
+    const descMatched = words.filter(w => descText.includes(w)).length;
+    // Job must have at least one word in its title/department to qualify
+    const relevance = titleMatched > 0
+      ? (titleMatched / words.length) + (descMatched / words.length) * 0.2
+      : 0;
+    return { ...j, _relevance: relevance };
+  });
+  return scored.filter(j => j._relevance > 0).sort((a, b) => b._relevance - a._relevance);
+}
+
 export default function NormalApplicantFlow() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -20,7 +39,8 @@ export default function NormalApplicantFlow() {
   // Support pre-selection when premium applicant navigates here with a normal job
   const preselectedJob = location.state?.preselectedJob || null;
 
-  const [step, setStep] = useState(preselectedJob ? 2 : 1);
+  const [step, setStep] = useState(preselectedJob ? 3 : 1);
+  const [roleInput, setRoleInput] = useState('');
   const [selectedJob, setSelectedJob] = useState(preselectedJob);
   const [answers, setAnswers] = useState({});
   const [resumeFile, setResumeFile] = useState(null);
@@ -29,6 +49,7 @@ export default function NormalApplicantFlow() {
   // Merge seed normal jobs + locally posted normal jobs from localStorage
   const postedNormalJobs = JSON.parse(localStorage.getItem('careesOS_normal_jobs') || '[]');
   const allNormalJobs = [...normalJobs, ...postedNormalJobs];
+  const filteredJobs = filterJobsByRole(allNormalJobs, roleInput);
 
   const activeQuestions = selectedJob
     ? (selectedJob.generic_questions || []).map(id => genericQuestionPresets.find(q => q.id === id)).filter(Boolean)
@@ -54,7 +75,7 @@ export default function NormalApplicantFlow() {
     };
     const existing = JSON.parse(localStorage.getItem('careesOS_normal_applications') || '[]');
     localStorage.setItem('careesOS_normal_applications', JSON.stringify([...existing, application]));
-    setStep(5);
+    setStep(6);
   };
 
   return (
@@ -73,16 +94,16 @@ export default function NormalApplicantFlow() {
       </header>
 
       {/* Step indicator */}
-      {step < 5 && (
+      {step < 6 && (
         <div className="flex items-center justify-center gap-2 py-3 border-b border-accent/5">
-          {['Job', 'Details', 'Questions', 'Contact'].map((label, i) => (
+          {['Role', 'Jobs', 'Details', 'Questions', 'Contact'].map((label, i) => (
             <div key={i} className="flex items-center gap-2">
               <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono transition-colors
                 ${step === i + 1 ? 'bg-accent text-bg' : step > i + 1 ? 'bg-success/30 text-success' : 'bg-elevated text-text-muted'}`}>
                 {step > i + 1 ? '✓' : i + 1}
               </div>
               <span className={`text-[10px] uppercase tracking-wider font-mono hidden sm:inline ${step === i + 1 ? 'text-accent' : 'text-text-muted'}`}>{label}</span>
-              {i < 3 && <span className="text-text-muted/30 text-xs">—</span>}
+              {i < 4 && <span className="text-text-muted/30 text-xs">—</span>}
             </div>
           ))}
         </div>
@@ -92,25 +113,60 @@ export default function NormalApplicantFlow() {
         <div className="max-w-2xl mx-auto">
           <AnimatePresence mode="wait">
 
-            {/* STEP 1: Job Selection */}
+            {/* STEP 1: Role Input */}
             {step === 1 && (
               <motion.div key="s1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                 <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 1 · Job Discovery</span>
-                  <h2 className="font-display text-2xl text-text mt-1">Standard Job Listings</h2>
-                  <p className="text-text-secondary text-sm mt-1">Browse available positions. Apply with your resume and a few short questions.</p>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 1 · Get Started</span>
+                  <h2 className="font-display text-2xl text-text mt-1">What role are you looking for?</h2>
+                  <p className="text-text-secondary text-sm mt-1">Tell us the role you're targeting and we'll show only the relevant listings.</p>
                 </div>
 
-                {allNormalJobs.length === 0 ? (
-                  <div className="p-8 text-center text-text-muted text-sm border border-accent/10 rounded-lg">
-                    No standard job listings available yet.
+                <form onSubmit={e => { e.preventDefault(); if (roleInput.trim()) setStep(2); }} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text mb-2">Target Role <span className="text-danger">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      value={roleInput}
+                      onChange={e => setRoleInput(e.target.value)}
+                      placeholder="e.g. HR Executive, Operations Manager, Customer Service..."
+                      className="w-full bg-surface border border-accent/20 rounded-lg px-4 py-3 text-text text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-text-muted"
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={!roleInput.trim()}
+                    className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Show Matching Jobs →
+                  </button>
+                </form>
+              </motion.div>
+            )}
+
+            {/* STEP 2: Filtered Job Listing */}
+            {step === 2 && (
+              <motion.div key="s2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                <div>
+                  <button onClick={() => setStep(1)} className="text-xs text-accent hover:text-accent-hover mb-4 flex items-center gap-1">← Change role</button>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 2 · Job Discovery</span>
+                  <h2 className="font-display text-2xl text-text mt-1">Jobs matching <span className="text-accent">"{roleInput}"</span></h2>
+                  <p className="text-text-secondary text-sm mt-1">{filteredJobs.length} listing{filteredJobs.length !== 1 ? 's' : ''} found. Click any role to view details and apply.</p>
+                </div>
+
+                {filteredJobs.length === 0 ? (
+                  <div className="p-8 text-center space-y-3 border border-accent/10 rounded-lg bg-surface">
+                    <p className="text-text-muted text-sm">No listings found matching <span className="text-text">"{roleInput}"</span>.</p>
+                    <button onClick={() => setStep(1)} className="text-xs text-accent hover:text-accent-hover underline">Try a different role</button>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {allNormalJobs.map(j => (
+                    {filteredJobs.map(j => (
                       <div
                         key={j.id}
-                        onClick={() => { setSelectedJob(j); setStep(2); }}
+                        onClick={() => { setSelectedJob(j); setStep(3); }}
                         className="p-5 rounded-lg bg-surface border border-accent/20 hover:border-accent/40 transition-all cursor-pointer group"
                       >
                         <div className="flex justify-between items-start">
@@ -132,11 +188,11 @@ export default function NormalApplicantFlow() {
               </motion.div>
             )}
 
-            {/* STEP 2: Job Detail */}
-            {step === 2 && selectedJob && (
-              <motion.div key="s2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+            {/* STEP 3: Job Detail */}
+            {step === 3 && selectedJob && (
+              <motion.div key="s3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                 {!preselectedJob && (
-                  <button onClick={() => setStep(1)} className="text-xs text-accent hover:text-accent-hover transition-colors flex items-center gap-1">← Back to listings</button>
+                  <button onClick={() => setStep(2)} className="text-xs text-accent hover:text-accent-hover transition-colors flex items-center gap-1">← Back to listings</button>
                 )}
                 <div>
                   <div className="flex items-center gap-2 mb-1">
@@ -172,17 +228,17 @@ export default function NormalApplicantFlow() {
                   Answer {activeQuestions.length} short screening questions and upload your resume. No AI scoring — a recruiter will review your application directly.
                 </div>
 
-                <button onClick={() => setStep(3)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium text-base hover:bg-accent-hover transition-colors">
+                <button onClick={() => setStep(4)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium text-base hover:bg-accent-hover transition-colors">
                   Apply for {selectedJob.title} →
                 </button>
               </motion.div>
             )}
 
-            {/* STEP 3: Generic Questions + Resume */}
-            {step === 3 && selectedJob && (
-              <motion.div key="s3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+            {/* STEP 4: Generic Questions + Resume */}
+            {step === 4 && selectedJob && (
+              <motion.div key="s4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                 <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 3 · Screening Questions</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 4 · Screening Questions</span>
                   <h2 className="font-display text-2xl text-text mt-1">Quick Application</h2>
                   <p className="text-text-secondary text-sm mt-1">Answer the following questions for <strong className="text-accent">{selectedJob.title}</strong>. These are reviewed directly by the recruiter.</p>
                 </div>
@@ -229,7 +285,7 @@ export default function NormalApplicantFlow() {
                 </div>
 
                 <button
-                  onClick={() => setStep(4)}
+                  onClick={() => setStep(5)}
                   disabled={!allAnswered || !resumeFile}
                   className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -238,11 +294,11 @@ export default function NormalApplicantFlow() {
               </motion.div>
             )}
 
-            {/* STEP 4: Contact Info */}
-            {step === 4 && (
-              <motion.div key="s4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+            {/* STEP 5: Contact Info */}
+            {step === 5 && (
+              <motion.div key="s5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                 <div>
-                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Final Step · Contact Details</span>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 5 · Contact Details</span>
                   <h2 className="font-display text-2xl text-text mt-1">Your Contact Information</h2>
                   <p className="text-text-secondary text-sm mt-1">Shared with the recruiter only if you are shortlisted.</p>
                 </div>
@@ -276,9 +332,9 @@ export default function NormalApplicantFlow() {
               </motion.div>
             )}
 
-            {/* STEP 5: Confirmation */}
-            {step === 5 && (
-              <motion.div key="s5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 text-center py-12">
+            {/* STEP 6: Confirmation */}
+            {step === 6 && (
+              <motion.div key="s6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 text-center py-12">
                 <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
                   <span className="text-4xl">✓</span>
                 </div>
@@ -301,7 +357,7 @@ export default function NormalApplicantFlow() {
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
                   <button
-                    onClick={() => { setStep(1); setAnswers({}); setResumeFile(null); setContactInfo({ name: '', email: '', phone: '' }); setSelectedJob(null); }}
+                    onClick={() => { setStep(1); setRoleInput(''); setAnswers({}); setResumeFile(null); setContactInfo({ name: '', email: '', phone: '' }); setSelectedJob(null); }}
                     className="px-6 py-3 rounded-lg bg-elevated text-text font-medium hover:bg-highlight transition-colors"
                   >
                     Browse More Jobs

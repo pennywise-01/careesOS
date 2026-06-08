@@ -3,165 +3,240 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { jobs, normalJobs } from '../data/mockData';
 
+function generateQuestionsForRole(role) {
+  return [
+    {
+      id: 'q1',
+      question: `Tell me about your proudest achievement in ${role} work. What was the specific problem, what did you personally do, and what was the measurable outcome?`,
+    },
+    {
+      id: 'q2',
+      question: `Describe the most complex challenge you've tackled as a ${role}. Walk me through your approach, the tools or methods you relied on, and the result.`,
+    },
+    {
+      id: 'q3',
+      question: `What specific tools, technologies, or frameworks do you consider yourself strongest in as a ${role}? Give a concrete example of how you applied them to solve a real problem.`,
+    },
+    {
+      id: 'q4',
+      question: `What kind of team and work environment brings out your best as a ${role}? Think about team size, pace, autonomy, and how decisions get made.`,
+    },
+    {
+      id: 'q5',
+      question: `Tell me about a time something you owned as a ${role} went wrong or underperformed. What happened, what was your role in it, and what did you do differently after?`,
+    },
+    {
+      id: 'q6',
+      question: `Where are you taking your ${role} career over the next 2 years? What kinds of work or environments are you moving toward — and what are you actively stepping away from?`,
+    },
+  ];
+}
+
+function calculateJobMatch(profile, jobItem, roleInput) {
+  if (!profile || !profile.skills) return 0;
+  const candidateSkills = profile.skills.map(s => s.name.toLowerCase());
+
+  // Role relevance — computed first as it gates everything else
+  const roleWords = roleInput.toLowerCase().split(/\s+/).filter(w => w.length > 1);
+  const jobText = `${jobItem.title} ${jobItem.department || ''} ${jobItem.description || ''}`.toLowerCase();
+  const matchedWords = roleWords.filter(w => jobText.includes(w));
+  const roleRelevance = roleWords.length > 0 ? matchedWords.length / roleWords.length : 0;
+
+  const avgConf = profile.skills.length > 0
+    ? profile.skills.reduce((sum, s) => sum + (s.confidence || 0), 0) / profile.skills.length
+    : 0.5;
+  const semantic = Math.min(0.99, (avgConf * 0.8) + 0.15);
+
+  const hasSkillReqs = jobItem.required_skills && jobItem.required_skills.filter(s => s.non_negotiable).length > 0;
+
+  if (hasSkillReqs) {
+    const required = jobItem.required_skills.filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
+    const isMatch = (req) => {
+      const words = req.split(/\s+/).filter(w => w.length > 3);
+      return words.some(w => candidateSkills.some(s => s.includes(w))) || candidateSkills.some(s => s.includes(req));
+    };
+    const skillCoverage = required.filter(isMatch).length / required.length;
+    // Completely unrelated job — no skills match AND role doesn't match
+    if (skillCoverage === 0 && roleRelevance === 0) return Math.round(semantic * 0.08 * 100);
+    const raw = (skillCoverage * 0.45) + (semantic * 0.35) + (roleRelevance * 0.20);
+    return Math.round(Math.min(raw, 0.99) * 100);
+  }
+
+  // For normal jobs without required_skills: role relevance gates the score.
+  // If completely unrelated (roleRelevance = 0), score stays very low.
+  if (roleRelevance === 0) return Math.round(semantic * 0.10 * 100);
+  const raw = (semantic * 0.55) + (roleRelevance * 0.45);
+  return Math.round(Math.min(raw, 0.99) * 100);
+}
+
 export default function UserJourney() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
 
-  // Merge premium seed jobs + locally posted premium jobs from localStorage
   const postedPremiumJobs = JSON.parse(localStorage.getItem('careesOS_premium_jobs') || '[]');
   const allJobs = [...jobs, ...normalJobs, ...postedPremiumJobs];
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedJob, setSelectedJob] = useState(null);
-  
-  // Application State
+
+  const [roleInput, setRoleInput] = useState('');
+  const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState({});
-  const [resumeFile, setResumeFile] = useState(null);
-  const [assessmentAnswer, setAssessmentAnswer] = useState('');
-  const [contactInfo, setContactInfo] = useState({ name: '', email: '', phone: '' });
-  
-  // Backend/AI State
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processingLog, setProcessingLog] = useState('');
   const [profile, setProfile] = useState(null);
-  const [assessment, setAssessment] = useState(null);
-  const [weights, setWeights] = useState({ semantic: 0.40, skill_coverage: 0.25, verification: 0.20, context_fit: 0.15 });
-  const [outcome, setOutcome] = useState(null);
-  const [processingLog, setProcessingLog] = useState("");
+  const [matchedJobs, setMatchedJobs] = useState([]);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [contactInfo, setContactInfo] = useState({ name: '', email: '', phone: '' });
+  const [workSampleAnswer, setWorkSampleAnswer] = useState('');
+  const [workSampleGrade, setWorkSampleGrade] = useState(null);
+  const [compositeScore, setCompositeScore] = useState(null);
 
-  const handleAnswerChange = (id, value) => {
-    setAnswers(prev => ({ ...prev, [id]: value }));
+  // Step 1 → 2
+  const handleRoleSubmit = (e) => {
+    e.preventDefault();
+    if (!roleInput.trim()) return;
+    setQuestions(generateQuestionsForRole(roleInput.trim()));
+    setAnswers({});
+    setStep(2);
   };
 
-  const handleFileChange = (e) => {
-    if (e.target.files[0]) {
-      setResumeFile(e.target.files[0].name);
-    }
-  };
-
-  // Step 2 -> 3: LLM Extraction
-  const handleSubmitApplication = async (e) => {
+  // Step 2 → 3: extract profile then calculate matches
+  const handleAnswersSubmit = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
-    setProcessingLog("Sending narrative to DeepSeek LLM for structured extraction...");
-
+    setProcessingLog('Sending your answers to AI for profile extraction...');
     try {
-      const response = await fetch('/api/extract-profile', {
+      const res = await fetch('/api/extract-profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answers })
+        body: JSON.stringify({ answers }),
       });
-
-      const result = await response.json();
+      const result = await res.json();
       if (result.success && result.data) {
-        setProfile({
-          name: "Candidate",
+        const extracted = {
           skills: result.data.skills.map(s => ({ ...s, verified: false, verified_score: null })),
           work_context: result.data.work_context || {},
           goals: result.data.goals || {},
           soft_signals: result.data.soft_signals || {},
-          red_flags: result.data.red_flags || []
-        });
-        setStep(4);
+          red_flags: result.data.red_flags || [],
+        };
+        setProfile(extracted);
+        setProcessingLog('Calculating your best job matches...');
+        const allScored = allJobs
+          .map(j => ({ ...j, matchPct: calculateJobMatch(extracted, j, roleInput) }))
+          .sort((a, b) => b.matchPct - a.matchPct);
+        // Only show jobs above 25% — never pad with unrelated roles
+        const relevant = allScored.filter(j => j.matchPct >= 25).slice(0, 3);
+        const scored = relevant.length > 0 ? relevant : allScored.slice(0, 1);
+        setMatchedJobs(scored);
+        setStep(3);
       } else {
-        alert("Failed to extract profile. Please try again.");
+        const reason = result.error || 'Unknown error';
+        alert(`Failed to extract profile: ${reason}\n\nCheck that DEEPSEEK_API_KEY is set in your .env file and restart the dev server.`);
       }
-    } catch (error) {
-      console.error("Backend API Error:", error);
-      alert("Error calling backend. Please try again.");
+    } catch (err) {
+      console.error(err);
+      alert(`Network error: ${err.message}\n\nMake sure the Vite dev server is running (npm run dev).`);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Step 4: Skill Verification
-  const handleAssessmentSubmit = async () => {
+  // Step 3 → 4: grade work sample and compute composite score
+  const handleWorkSampleSubmit = async (e) => {
+    e.preventDefault();
     setIsProcessing(true);
-    setProcessingLog("Sending submission to DeepSeek for grading...");
+    setProcessingLog('Grading your work sample with AI...');
     try {
-      const task = selectedJob.work_sample_task;
-      const response = await fetch('/api/grade-assessment', {
+      const task = selectedJob.work_sample_task || selectedJob.work_sample?.title || 'Complete the assigned task';
+      const res = await fetch('/api/grade-assessment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ answer: assessmentAnswer, task })
+        body: JSON.stringify({ answer: workSampleAnswer, task }),
       });
-      const result = await response.json();
+      const result = await res.json();
       if (result.success && result.data) {
-        const g = result.data;
-        const newAssessment = {
-          task_completion: g.task_completion,
-          technical_accuracy: g.technical_accuracy,
-          work_quality: g.work_quality,
-          communication: g.communication,
-          raw_score: ((g.task_completion + g.technical_accuracy + g.work_quality + g.communication) / 4),
-          normalised_score: g.normalised_score,
-          feedback: g.feedback
-        };
-        setAssessment(newAssessment);
-        setProfile(prev => ({
-          ...prev,
-          skills: prev.skills.map(s => ({ ...s, verified: true, verified_score: g.normalised_score }))
-        }));
-        setProcessingLog("Grading complete. Profile updated.");
+        setWorkSampleGrade(result.data);
+        const avgConf = profile.skills.length > 0
+          ? profile.skills.reduce((sum, s) => sum + (s.confidence || 0), 0) / profile.skills.length
+          : 0.5;
+        const semanticRaw = Math.min(0.99, (avgConf * 0.8) + 0.15);
+        const candidateSkills = profile.skills.map(s => s.name.toLowerCase());
+        let skillCoverageRaw = 0.5;
+        if (selectedJob.required_skills) {
+          const required = selectedJob.required_skills.filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
+          if (required.length > 0) {
+            const isMatch = (req) => {
+              const words = req.split(/\s+/).filter(w => w.length > 3);
+              return words.some(w => candidateSkills.some(s => s.includes(w))) || candidateSkills.some(s => s.includes(req));
+            };
+            skillCoverageRaw = required.filter(isMatch).length / required.length;
+          }
+        }
+        const verificationRaw = result.data.normalised_score || 0;
+        const contextFitRaw = profile.work_context?.preferred_pace ? 0.70 : 0.40;
+        const composite = (semanticRaw * 0.40) + (skillCoverageRaw * 0.25) + (verificationRaw * 0.20) + (contextFitRaw * 0.15);
+        setCompositeScore({
+          composite: composite.toFixed(3),
+          semantic: (semanticRaw * 0.40).toFixed(3),
+          skillCoverage: (skillCoverageRaw * 0.25).toFixed(3),
+          verification: (verificationRaw * 0.20).toFixed(3),
+          contextFit: (contextFitRaw * 0.15).toFixed(3),
+          semanticRaw: semanticRaw.toFixed(2),
+          skillCoverageRaw: skillCoverageRaw.toFixed(2),
+          verificationRaw: verificationRaw.toFixed(2),
+          contextFitRaw: contextFitRaw.toFixed(2),
+        });
+        setStep(5);
       } else {
-        alert("Failed to grade assessment. Please try again.");
+        alert(`Failed to grade work sample: ${result.error || 'Unknown error'}`);
       }
-    } catch (error) {
-      console.error('Assessment grading error:', error);
-      alert("Error grading assessment. Please try again.");
+    } catch (err) {
+      console.error(err);
+      alert(`Network error: ${err.message}`);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Step 5: Dynamic Matching Calculation
-  const calculateMatch = () => {
-    if (!profile) return null;
-
-    const requiredSkills = selectedJob.required_skills.filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
-    const candidateSkills = profile.skills.map(s => s.name.toLowerCase());
-    const skillMatches = (req, extracted) => {
-      const words = req.split(/\s+/).filter(w => w.length > 3);
-      return words.some(w => extracted.some(s => s.includes(w))) || extracted.some(s => s.includes(req));
-    };
-    const matchedSkills = requiredSkills.filter(req => skillMatches(req, candidateSkills));
-    const skillCoverage = requiredSkills.length > 0 ? matchedSkills.length / requiredSkills.length : 0;
-
-    let contextMatches = 0;
-    let contextTotal = 0;
-    if (profile.work_context?.preferred_pace && selectedJob.team_context?.pace) {
-      contextTotal++;
-      if (profile.work_context.preferred_pace === selectedJob.team_context.pace) contextMatches++;
-    }
-    if (profile.work_context?.autonomy_level && selectedJob.team_context?.autonomy_offered) {
-      contextTotal++;
-      if (profile.work_context.autonomy_level === selectedJob.team_context.autonomy_offered) contextMatches++;
-    }
-    const contextFit = contextTotal > 0 ? contextMatches / contextTotal : 0.5;
-
-    const verification = assessment ? assessment.normalised_score : 0.0;
-
-    const avgConfidence = profile.skills.length > 0 
-      ? profile.skills.reduce((sum, s) => sum + s.confidence, 0) / profile.skills.length 
+  // Step 5 → 6: save application
+  const handleContactSubmit = (e) => {
+    e.preventDefault();
+    const avgConf = profile.skills.length > 0
+      ? profile.skills.reduce((s, sk) => s + (sk.confidence || 0), 0) / profile.skills.length
       : 0.5;
-    const semantic = Math.min(0.99, (avgConfidence * 0.8) + 0.15);
-
-    return {
-      semanticRaw: semantic.toFixed(2),
-      skillCoverageRaw: skillCoverage.toFixed(2),
-      verificationRaw: verification.toFixed(2),
-      contextFitRaw: contextFit.toFixed(2),
-      semantic: (semantic * weights.semantic).toFixed(3),
-      skillCoverage: (skillCoverage * weights.skill_coverage).toFixed(3),
-      verification: (verification * weights.verification).toFixed(3),
-      contextFit: (contextFit * weights.context_fit).toFixed(3),
-      composite: (
-        (semantic * weights.semantic) +
-        (skillCoverage * weights.skill_coverage) +
-        (verification * weights.verification) +
-        (contextFit * weights.context_fit)
-      ).toFixed(3)
+    const application = {
+      id: `live-${Date.now()}`,
+      name: contactInfo.name,
+      email: contactInfo.email,
+      phone: contactInfo.phone,
+      jobId: selectedJob.id,
+      jobTitle: selectedJob.title,
+      roleInput,
+      skills: profile.skills,
+      work_context: profile.work_context,
+      goals: profile.goals,
+      soft_signals: profile.soft_signals,
+      red_flags: profile.red_flags,
+      workSampleGrade: workSampleGrade || null,
+      matchScore: compositeScore || { composite: (selectedJob.matchPct / 100).toFixed(3) },
+      submittedAt: new Date().toISOString(),
+      embedding_mock: [avgConf, Math.min(1, profile.skills.length / 10), 0, avgConf * 0.9],
     };
+    const existing = JSON.parse(localStorage.getItem('careesOS_applications') || '[]');
+    localStorage.setItem('careesOS_applications', JSON.stringify([...existing, application]));
+    setStep(6);
   };
 
-  const matchScore = calculateMatch();
+  const resetAll = () => {
+    setStep(1); setRoleInput(''); setQuestions([]); setAnswers({});
+    setProfile(null); setMatchedJobs([]); setSelectedJob(null);
+    setContactInfo({ name: '', email: '', phone: '' });
+    setWorkSampleAnswer(''); setWorkSampleGrade(null); setCompositeScore(null);
+  };
+
+  const matchColor = (pct) =>
+    pct >= 75 ? 'bg-success/10 border-success/30 text-success' :
+    pct >= 50 ? 'bg-accent/10 border-accent/30 text-accent' :
+    'bg-elevated border-highlight text-text-muted';
 
   return (
     <div className="h-screen flex flex-col">
@@ -174,530 +249,405 @@ export default function UserJourney() {
           <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-accent/10 text-accent border border-accent/30">PREMIUM</span>
           <span className="text-xs text-text-secondary">Applicant</span>
         </div>
-        <button onClick={() => navigate('/reviewer/premium')} className="text-sm font-medium px-4 py-2 rounded-lg bg-employer-accent text-bg hover:opacity-90 transition-colors">
-          Reviewer Dashboard →
-        </button>
       </header>
 
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 overflow-y-auto bg-bg p-6">
-          <div className="max-w-4xl mx-auto">
-            
-            <AnimatePresence mode="wait">
-              {/* STEP 1: Job Selection */}
-              {step === 1 && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+      <div className="flex-1 overflow-y-auto bg-bg p-6">
+        <div className="max-w-2xl mx-auto">
+          <AnimatePresence mode="wait">
+
+            {/* ── STEP 1: Role Input ── */}
+            {step === 1 && (
+              <motion.div key="s1" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                <div>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 1 · Get Started</span>
+                  <h2 className="font-display text-2xl text-text mt-1">What role are you looking for?</h2>
+                  <p className="text-text-secondary text-sm mt-1">
+                    Tell us the role you're targeting. We'll generate 6 tailored questions to build your verified skills profile — then match you to the top 3 relevant jobs.
+                  </p>
+                </div>
+
+                <form onSubmit={handleRoleSubmit} className="space-y-4">
                   <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 1 · Job Discovery</span>
-                    <h2 className="font-display text-2xl text-text mt-1">All Available Roles</h2>
-                    <p className="text-text-secondary text-sm mt-1">Premium jobs use AI-graded work samples. Standard jobs use a quick questions-and-resume flow.</p>
+                    <label className="block text-sm font-medium text-text mb-2">Target Role <span className="text-danger">*</span></label>
+                    <input
+                      type="text"
+                      required
+                      autoFocus
+                      value={roleInput}
+                      onChange={e => setRoleInput(e.target.value)}
+                      placeholder="e.g. DevOps Engineer, HR Business Partner, Operations Manager..."
+                      className="w-full bg-surface border border-accent/20 rounded-lg px-4 py-3 text-text text-sm focus:outline-none focus:border-accent transition-colors placeholder:text-text-muted"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1.5">Be specific — the more detail you give, the better your questions will be.</p>
                   </div>
-                  <div className="space-y-3">
-                    {allJobs.map(j => (
-                      <div
-                        key={j.id}
-                        className="p-6 rounded-lg bg-surface border border-accent/20 hover:border-accent/40 transition-all cursor-pointer group"
-                        onClick={() => {
-                          if (!j.premium) {
-                            navigate('/apply/normal', { state: { preselectedJob: j } });
-                          } else {
-                            setSelectedJob(j);
-                            setStep(2);
-                          }
-                        }}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <div className="text-[10px] font-mono uppercase tracking-wider text-accent">{j.department}</div>
-                              {j.premium
-                                ? <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-accent/10 text-accent border border-accent/30">PREMIUM</span>
-                                : <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-elevated text-text-muted">Standard</span>
-                              }
-                            </div>
-                            <h3 className="text-lg font-medium text-text">{j.title}</h3>
-                            <p className="text-sm text-text-secondary mt-1">{j.type}</p>
-                            {j.premium && j.required_skills && (
-                              <div className="flex flex-wrap gap-2 mt-3">
-                                {j.required_skills.map(s => (
-                                  <span key={s.name} className={`px-2 py-1 rounded text-xs ${s.non_negotiable ? 'bg-accent/10 text-accent' : 'bg-elevated text-text-muted'}`}>
-                                    {s.name} ({s.level}){s.non_negotiable && ' ✱'}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            {!j.premium && (
-                              <p className="text-xs text-text-muted mt-2 italic">Quick apply — resume + {j.generic_questions?.length || 0} screening questions</p>
-                            )}
-                          </div>
-                          <div className="flex flex-col items-end gap-2 ml-4 flex-shrink-0">
-                            {j.mock_match != null && (
-                              <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg border ${
-                                j.mock_match >= 75 ? 'bg-success/10 border-success/30 text-success' :
-                                j.mock_match >= 50 ? 'bg-accent/10 border-accent/30 text-accent' :
-                                'bg-elevated border-highlight text-text-muted'
-                              }`}>
-                                <span className="text-lg font-bold leading-none">{j.mock_match}%</span>
-                                <span className="text-[9px] font-mono uppercase tracking-wider opacity-80">match</span>
-                              </div>
-                            )}
-                            <span className="text-accent text-xl group-hover:translate-x-1 transition-transform">→</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-
-              {/* STEP 2: Job Detail */}
-              {step === 2 && selectedJob && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-                  <button onClick={() => setStep(1)} className="text-xs text-accent hover:text-accent-hover transition-colors flex items-center gap-1">← Back to all roles</button>
-                  <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">{selectedJob.department} · {selectedJob.type}</span>
-                    <h2 className="font-display text-3xl text-text mt-1">{selectedJob.title}</h2>
-                  </div>
-
-                  <div className="p-5 rounded-lg bg-surface border border-accent/10 space-y-4">
-                    <div>
-                      <h3 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-2">About the Role</h3>
-                      <p className="text-text-secondary text-sm leading-relaxed">{selectedJob.description}</p>
-                    </div>
-                    <div className="border-t border-accent/10 pt-4">
-                      <h3 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-3">Requirements</h3>
-                      <ul className="space-y-2">
-                        {selectedJob.requirements.map((r, i) => (
-                          <li key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                            <span className="text-accent mt-0.5 flex-shrink-0">→</span>{r}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="border-t border-accent/10 pt-4">
-                      <h3 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-2">About the Company</h3>
-                      <p className="text-text-secondary text-sm leading-relaxed">{selectedJob.about_company}</p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-employer-surface border border-employer-accent/20 text-sm text-text-secondary">
-                    <span className="text-employer-accent font-medium">How this application works: </span>
-                    You will answer 6 narrative questions, complete a short work sample task, and our AI will build a verified skills profile — no keyword-matching against your resume.
-                  </div>
-
-                  <button onClick={() => setStep(3)} className="w-full py-4 rounded-lg bg-accent text-bg font-medium text-base hover:bg-accent-hover transition-colors">
-                    Apply for {selectedJob.title} →
+                  <button
+                    type="submit"
+                    disabled={!roleInput.trim()}
+                    className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Generate My Questions →
                   </button>
-                </motion.div>
-              )}
+                </form>
 
-              {/* STEP 3: Guided Questionnaire */}
-              {step === 3 && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-                  <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 3 · Candidate Profile Pipeline</span>
-                    <h2 className="font-display text-2xl text-text mt-1">Guided Narrative Questionnaire</h2>
-                    <p className="text-text-secondary text-sm mt-1">Answer these 6 open-ended questions for the <strong className="text-accent">{selectedJob?.title}</strong> role. Our AI evaluates your narrative to extract real evidence, preventing keyword stuffing.</p>
-                  </div>
+                <div className="p-4 rounded-lg bg-surface border border-accent/10 space-y-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-accent">How this works</div>
+                  {[
+                    { n: '01', t: 'Answer 6 narrative questions tailored to your exact role' },
+                    { n: '02', t: 'AI extracts a verified skills profile from your answers (Layer 1)' },
+                    { n: '03', t: 'See your top 3 matching jobs with a Layer 1 match score' },
+                    { n: '04', t: 'Complete a role-specific work sample task — graded by AI (Layer 2)' },
+                    { n: '05', t: 'Submit contact details — final composite score (L1 + L2) is saved' },
+                  ].map(item => (
+                    <div key={item.n} className="flex items-start gap-3">
+                      <span className="font-mono text-[10px] text-accent/40 mt-0.5 w-5 flex-shrink-0">{item.n}</span>
+                      <span className="text-xs text-text-secondary">{item.t}</span>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
 
-                  {/* Evaluation Legend */}
-                  <div className="p-4 rounded-lg bg-surface border border-accent/10">
-                    <h3 className="font-mono text-xs uppercase tracking-wider text-accent mb-3">How Your Application is Evaluated</h3>
-                    <div className="grid md:grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <div className="font-medium text-text mb-1">What the AI Looks For:</div>
-                        <ul className="list-disc list-inside text-text-secondary space-y-1 text-xs">
-                          <li><strong className="text-text">Concrete Evidence:</strong> Verbatim quotes of what you actually built or solved.</li>
-                          <li><strong className="text-text">Work Context:</strong> Team size, pace, and autonomy preferences.</li>
-                          <li><strong className="text-text">Career Goals:</strong> Direction you're heading and what you want to avoid.</li>
-                          <li><strong className="text-danger">Red Flags:</strong> Vague answers, keyword stuffing, or inconsistencies.</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <div className="font-medium text-text mb-1">Composite Score Ranges:</div>
-                        <div className="space-y-1 text-xs">
-                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-success"></span><span className="text-text"><strong>0.75 – 1.00 (Strong):</strong> Fast-track to interview.</span></div>
-                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-accent"></span><span className="text-text"><strong>0.60 – 0.74 (Marginal):</strong> Manual review or assessment required.</span></div>
-                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-danger"></span><span className="text-text"><strong>&lt; 0.60 (Reject):</strong> Significant skill or context gaps.</span></div>
+            {/* ── STEP 2: Dynamic Questions ── */}
+            {step === 2 && (
+              <motion.div key="s2" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                <div>
+                  <button onClick={() => setStep(1)} className="text-xs text-accent hover:text-accent-hover mb-4 flex items-center gap-1">← Back</button>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 2 · Profile Questions</span>
+                  <h2 className="font-display text-2xl text-text mt-1">Your {roleInput} Profile</h2>
+                  <p className="text-text-secondary text-sm mt-1">
+                    Answer honestly and specifically. The AI extracts only what is directly evidenced — vague answers produce a weaker match score.
+                  </p>
+                </div>
+
+                <form onSubmit={handleAnswersSubmit} className="space-y-5">
+                  {questions.map((q, i) => (
+                    <motion.div
+                      key={q.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.06 }}
+                    >
+                      <label className="block text-sm font-medium text-text mb-2">
+                        <span className="text-accent/50 font-mono text-[10px] mr-2">{String(i + 1).padStart(2, '0')}</span>
+                        {q.question} <span className="text-danger">*</span>
+                      </label>
+                      <textarea
+                        required
+                        minLength={30}
+                        className="w-full h-24 bg-surface border border-accent/20 rounded-lg p-3 text-text text-sm focus:outline-none focus:border-accent transition-colors resize-none"
+                        placeholder="Be specific — describe what you actually did, not what you know in theory..."
+                        value={answers[q.id] || ''}
+                        onChange={e => setAnswers(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      />
+                      <p className="text-[10px] text-text-muted mt-1">Min. 30 characters required.</p>
+                    </motion.div>
+                  ))}
+
+                  <button
+                    type="submit"
+                    disabled={isProcessing}
+                    className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+                  >
+                    {isProcessing ? 'Finding your best matches...' : 'Find My Job Matches →'}
+                  </button>
+                  {isProcessing && (
+                    <div className="p-3 rounded bg-bg/50 border border-accent/20 font-mono text-xs text-accent animate-pulse text-center">
+                      {processingLog}
+                    </div>
+                  )}
+                </form>
+              </motion.div>
+            )}
+
+            {/* ── STEP 3: Matched Jobs ── */}
+            {step === 3 && (
+              <motion.div key="s3" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                <div>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-success">Step 3 · Your Matches</span>
+                  <h2 className="font-display text-2xl text-text mt-1">Top 3 Jobs For You</h2>
+                  <p className="text-text-secondary text-sm mt-1">
+                    Matched against your AI-extracted profile for <span className="text-accent font-medium">{roleInput}</span>. Click Apply on any role to proceed.
+                  </p>
+                </div>
+
+                <div className="space-y-3">
+                  {matchedJobs.map((j, i) => (
+                    <motion.div
+                      key={j.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.08 }}
+                      className="p-5 rounded-xl bg-surface border border-accent/15 hover:border-accent/35 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <span className="text-[10px] font-mono uppercase tracking-wider text-accent">{j.department}</span>
+                            {j.premium
+                              ? <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-accent/10 text-accent border border-accent/30">PREMIUM</span>
+                              : <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-elevated text-text-muted">Standard</span>
+                            }
+                          </div>
+                          <h3 className="text-base font-medium text-text">{j.title}</h3>
+                          <p className="text-xs text-text-secondary mt-0.5">{j.type}</p>
+                          {j.required_skills && (
+                            <div className="flex flex-wrap gap-1.5 mt-2">
+                              {j.required_skills.filter(s => s.non_negotiable).slice(0, 3).map(s => (
+                                <span key={s.name} className="px-2 py-0.5 rounded text-[10px] bg-accent/10 text-accent">{s.name}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                          <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg border ${matchColor(j.matchPct)}`}>
+                            <span className="text-lg font-bold leading-none">{j.matchPct}%</span>
+                            <span className="text-[9px] font-mono uppercase tracking-wider opacity-80">match</span>
+                          </div>
+                          <button
+                            onClick={() => { setSelectedJob(j); setWorkSampleAnswer(''); setWorkSampleGrade(null); setCompositeScore(null); setStep(j.work_sample ? 4 : 5); }}
+                            className="px-4 py-1.5 rounded-lg bg-accent text-bg text-xs font-medium hover:bg-accent-hover transition-colors"
+                          >
+                            Apply →
+                          </button>
                         </div>
                       </div>
-                    </div>
-                  </div>
+                    </motion.div>
+                  ))}
+                </div>
 
-                  <form onSubmit={handleSubmitApplication} className="space-y-6">
-                    {selectedJob?.questionnaire.map((q) => (
-                      <div key={q.id}>
-                        <label className="block text-sm font-medium text-text mb-2">
-                          {q.question} <span className="text-danger">*</span>
-                        </label>
-                        <textarea 
-                          required
-                          minLength={30}
-                          name={q.id}
-                          className="w-full h-24 bg-surface border border-accent/20 rounded-lg p-3 text-text text-sm focus:outline-none focus:border-accent transition-colors"
-                          placeholder="Provide specific details, outcomes, and your personal contribution..."
-                          value={answers[q.id] || ''}
-                          onChange={(e) => handleAnswerChange(q.id, e.target.value)}
-                        />
-                        <p className="text-[10px] text-text-muted mt-1">Minimum 30 characters required to ensure meaningful context.</p>
-                      </div>
-                    ))}
-
-                    <div className="p-4 rounded-lg bg-employer-surface border border-employer-accent/20">
-                      <label className="block text-sm font-medium text-employer-accent mb-2">Attach Resume (Optional)</label>
-                      <input type="file" accept=".pdf,.doc,.docx" onChange={handleFileChange} className="block w-full text-sm text-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-elevated file:text-employer-accent hover:file:bg-highlight" />
-                      {resumeFile && <p className="text-xs text-success mt-2">✓ {resumeFile} attached.</p>}
-                      <p className="text-[10px] text-text-muted mt-2 italic">
-                        Note: This resume is forwarded to the hiring manager for human review only. It is <strong>NOT</strong> parsed by our matching AI to prevent keyword bias and ensure fair evaluation based on your narrative answers.
-                      </p>
-                    </div>
-
-                    <button type="submit" disabled={isProcessing} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-50">
-                      {isProcessing ? 'Processing with DeepSeek LLM...' : 'Submit Application & Extract Profile →'}
-                    </button>
-                    {isProcessing && (
-                      <div className="p-3 rounded bg-bg/50 border border-accent/20 font-mono text-xs text-accent animate-pulse text-center">
-                        {processingLog}
-                      </div>
-                    )}
-                  </form>
-                </motion.div>
-              )}
-
-              {/* STEP 4: LLM Extracted Profile Review */}
-              {step === 4 && profile && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-                  <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-success">Step 4 Complete · LLM Extraction Successful</span>
-                    <h2 className="font-display text-2xl text-text mt-1">Your Structured Profile</h2>
-                    <p className="text-text-secondary text-sm mt-1">This is exactly what the hiring system sees. No keywords were stuffed; only evidence-based claims were extracted.</p>
-                  </div>
-
-                  <div className="p-4 rounded-lg bg-surface border border-accent/10 space-y-4">
-                    <div>
-                      <h3 className="font-mono text-xs uppercase tracking-wider text-accent mb-2">Extracted Skills & Evidence</h3>
-                      {profile.skills.map((skill, idx) => (
-                        <div key={idx} className="p-3 rounded bg-bg/50 border border-accent/5 mb-2">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-text font-medium capitalize">{skill.name}</span>
-                            <span className="px-2 py-0.5 rounded-full bg-elevated text-text-muted text-[10px] font-medium uppercase">
-                              {skill.inferred_level} · {(skill.confidence * 100).toFixed(0)}% Confidence
-                            </span>
+                {profile?.skills?.length > 0 && (
+                  <div className="p-4 rounded-lg bg-surface border border-accent/10">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">Your Extracted Profile</div>
+                    <div className="space-y-1.5">
+                      {profile.skills.slice(0, 5).map((skill, i) => (
+                        <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-accent/5 last:border-0">
+                          <span className="text-text capitalize">{skill.name}</span>
+                          <div className="flex items-center gap-2 text-[10px]">
+                            <span className="text-text-muted capitalize">{skill.inferred_level}</span>
+                            <span className="font-mono text-accent">{(skill.confidence * 100).toFixed(0)}% conf</span>
                           </div>
-                          <div className="text-xs text-text-secondary italic">"{skill.evidence_quote}"</div>
                         </div>
                       ))}
                     </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 rounded bg-bg/50 border border-accent/5">
-                        <h4 className="font-mono text-[10px] uppercase tracking-wider text-text-muted mb-1">Work Context</h4>
-                        <p className="text-sm text-text">Pace: {profile.work_context.preferred_pace || 'N/A'}</p>
-                        <p className="text-sm text-text">Autonomy: {profile.work_context.autonomy_level || 'N/A'}</p>
-                      </div>
-                      <div className="p-3 rounded bg-bg/50 border border-accent/5">
-                        <h4 className="font-mono text-[10px] uppercase tracking-wider text-text-muted mb-1">Career Goals</h4>
-                        <p className="text-sm text-text">Direction: {profile.goals.direction || 'N/A'}</p>
-                        <p className="text-sm text-danger">Avoids: {profile.goals.anti_preferences?.join(', ') || 'None'}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button onClick={() => setStep(5)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
-                    Proceed to Skill Verification (Layer 2) →
-                  </button>
-                </motion.div>
-              )}
-
-              {/* STEP 5: Skill Verification */}
-              {step === 5 && profile && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
-                  <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-employer-accent">Layer 2 · Skill Verification</span>
-                    <h2 className="font-display text-2xl text-text mt-1">Work Sample Assessment</h2>
-                    <p className="text-text-secondary text-sm mt-1">To verify your claims, complete this parameterized task. Your approach and reasoning are graded, not just the final output.</p>
-                  </div>
-
-                  {!assessment ? (
-                    <div className="space-y-4">
-                      <div className="p-5 rounded-lg bg-employer-surface border border-employer-accent/20">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-medium text-employer-accent">{selectedJob?.work_sample.title}</h3>
-                          <span className="px-2 py-1 rounded bg-elevated text-[10px] text-text-muted font-mono">Time limit: {selectedJob?.work_sample.time_limit}</span>
-                        </div>
-
-                        <div className="space-y-3 text-sm text-text-secondary mb-4">
-                          <p><strong className="text-text">Context:</strong> {selectedJob?.work_sample.context}</p>
-                          <p><strong className="text-text">Your Task:</strong></p>
-                          <ol className="list-decimal list-inside space-y-1 ml-2">
-                            {selectedJob?.work_sample.steps.map((s, i) => <li key={i}>{s}</li>)}
-                          </ol>
-                        </div>
-
-                        {selectedJob?.work_sample.artifact && (
-                          <div className={`p-3 rounded bg-bg border border-accent/10 text-xs text-text-muted mb-4 overflow-x-auto whitespace-pre-wrap ${selectedJob.work_sample.artifact_type === 'code' ? 'font-mono' : 'font-sans'}`}>
-                            {selectedJob.work_sample.artifact}
-                          </div>
-                        )}
-
-                        <div>
-                          <label className="block text-sm font-medium text-text mb-2">Your Solution & Reasoning:</label>
-                          <textarea
-                            className="w-full h-40 bg-bg border border-accent/20 rounded-lg p-3 text-text text-sm font-mono focus:outline-none focus:border-employer-accent transition-colors"
-                            placeholder={selectedJob?.work_sample.placeholder}
-                            value={assessmentAnswer}
-                            onChange={(e) => setAssessmentAnswer(e.target.value)}
-                          ></textarea>
-                        </div>
-                      </div>
-
-                      <button onClick={handleAssessmentSubmit} disabled={isProcessing} className="w-full py-3 rounded-lg bg-employer-accent text-bg font-medium hover:opacity-90 transition-colors disabled:opacity-50">
-                        {isProcessing ? 'Processing...' : 'Submit Assessment for Grading →'}
-                      </button>
-                      
-                      {isProcessing && (
-                        <div className="p-3 rounded bg-bg/50 border border-employer-accent/20 font-mono text-xs text-employer-accent animate-pulse text-center">
-                          {`> ${processingLog}`}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-4 gap-2 text-center">
-                        <div className="p-2 rounded bg-bg/50"><div className="text-[10px] text-text-muted">Completion</div><div className="font-mono text-success">{(assessment.task_completion * 100).toFixed(0)}%</div></div>
-                        <div className="p-2 rounded bg-bg/50"><div className="text-[10px] text-text-muted">Accuracy</div><div className="font-mono text-success">{(assessment.technical_accuracy * 100).toFixed(0)}%</div></div>
-                        <div className="p-2 rounded bg-bg/50"><div className="text-[10px] text-text-muted">Quality</div><div className="font-mono text-success">{(assessment.work_quality * 100).toFixed(0)}%</div></div>
-                        <div className="p-2 rounded bg-bg/50"><div className="text-[10px] text-text-muted">Communication</div><div className="font-mono text-success">{(assessment.communication * 100).toFixed(0)}%</div></div>
-                      </div>
-                      <div className="p-3 rounded bg-success/10 border border-success/30 text-center">
-                        <div className="text-xs text-success font-medium uppercase tracking-wider">Normalised Score: {(assessment.normalised_score * 100).toFixed(0)}th Percentile</div>
-                        {assessment.feedback && <div className="text-xs text-text-secondary mt-1 italic">"{assessment.feedback}"</div>}
-                      </div>
-                      
-                      <div className="p-3 rounded bg-bg/50 border border-success/20">
-                        <div className="text-[10px] text-text-muted uppercase mb-2">Profile Automatically Updated:</div>
-                        {profile.skills.map((skill, idx) => (
-                          <div key={idx} className="flex items-center justify-between text-xs mb-1">
-                            <span className="text-text">{skill.name}</span>
-                            <span className="px-2 py-0.5 rounded-full bg-success/20 text-success text-[10px] font-medium">
-                              Verified ({(skill.verified_score * 100).toFixed(0)}%)
-                            </span>
+                    {profile.red_flags?.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-danger/10 space-y-1">
+                        {profile.red_flags.map((f, i) => (
+                          <div key={i} className="flex items-start gap-1.5 text-[10px] text-danger">
+                            <span>⚠</span><span>{f.detail}</span>
                           </div>
                         ))}
                       </div>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
 
-                      <button onClick={() => setStep(6)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
-                        View Matching Calculation (Layer 1+2) →
-                      </button>
+            {/* ── STEP 4: Work Sample ── */}
+            {step === 4 && selectedJob?.work_sample && (
+              <motion.div key="s4" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                <div>
+                  <button onClick={() => setStep(3)} className="text-xs text-accent hover:text-accent-hover mb-4 flex items-center gap-1">← Back to matches</button>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 4 · Work Sample</span>
+                  <h2 className="font-display text-2xl text-text mt-1">Verify Your Skills</h2>
+                  <p className="text-text-secondary text-sm mt-1">
+                    Complete this task for <span className="text-accent font-medium">{selectedJob.title}</span>. Your answer is graded by AI — this becomes your Layer 2 verification score and boosts your composite match.
+                  </p>
+                </div>
+
+                <div className="p-4 rounded-lg bg-surface border border-accent/15 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-text">{selectedJob.work_sample.title}</span>
+                    <span className="text-[10px] font-mono text-text-muted bg-elevated px-2 py-0.5 rounded">{selectedJob.work_sample.time_limit}</span>
+                  </div>
+                  <p className="text-xs text-text-secondary leading-relaxed">{selectedJob.work_sample.context}</p>
+                  <ol className="space-y-1.5">
+                    {selectedJob.work_sample.steps.map((s, i) => (
+                      <li key={i} className="flex items-start gap-2 text-xs text-text-secondary">
+                        <span className="text-accent font-mono text-[10px] mt-0.5 flex-shrink-0">{i + 1}.</span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+
+                {selectedJob.work_sample.artifact && (
+                  <div className="rounded-lg bg-bg border border-accent/10 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-accent/10 flex items-center justify-between">
+                      <span className="text-[10px] font-mono uppercase tracking-wider text-text-muted">Reference Material</span>
+                      <span className="text-[10px] font-mono text-accent">{selectedJob.work_sample.artifact_type}</span>
+                    </div>
+                    <pre className="p-3 text-xs text-text-secondary font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed">{selectedJob.work_sample.artifact}</pre>
+                  </div>
+                )}
+
+                <form onSubmit={handleWorkSampleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text mb-2">Your Answer <span className="text-danger">*</span></label>
+                    <textarea
+                      required
+                      minLength={50}
+                      rows={8}
+                      className="w-full bg-surface border border-accent/20 rounded-lg p-3 text-text text-sm focus:outline-none focus:border-accent transition-colors resize-none"
+                      placeholder={selectedJob.work_sample.placeholder || 'Write your detailed answer here...'}
+                      value={workSampleAnswer}
+                      onChange={e => setWorkSampleAnswer(e.target.value)}
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">Min. 50 characters. Be specific — this is graded by AI.</p>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isProcessing || workSampleAnswer.length < 50}
+                    className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-50"
+                  >
+                    {isProcessing ? 'Grading your submission...' : 'Submit Work Sample →'}
+                  </button>
+                  {isProcessing && (
+                    <div className="p-3 rounded bg-bg/50 border border-accent/20 font-mono text-xs text-accent animate-pulse text-center">
+                      {processingLog}
                     </div>
                   )}
-                </motion.div>
-              )}
+                </form>
+              </motion.div>
+            )}
 
-              {/* STEP 6: Matching Calculation */}
-              {step === 6 && matchScore && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+            {/* ── STEP 5: Contact Details ── */}
+            {step === 5 && selectedJob && (
+              <motion.div key="s5" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                <div>
+                  <button onClick={() => setStep(selectedJob.work_sample ? 4 : 3)} className="text-xs text-accent hover:text-accent-hover mb-4 flex items-center gap-1">← Back</button>
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Final Step · Your Details</span>
+                  <h2 className="font-display text-2xl text-text mt-1">Applying for {selectedJob.title}</h2>
+                  <p className="text-text-secondary text-sm mt-1">
+                    Your contact details will only be shared with the hiring team if you're shortlisted.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between p-4 rounded-lg bg-surface border border-accent/10">
                   <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Layer 1+2 · Composite Match Score</span>
-                    <h2 className="font-display text-2xl text-text mt-1">Matching Calculation</h2>
-                    <p className="text-text-secondary text-sm mt-1">Here is how your profile scores against the role requirements before you submit.</p>
+                    <div className="text-[10px] text-text-muted font-mono uppercase mb-0.5">{selectedJob.department}</div>
+                    <div className="text-sm font-medium text-text">{selectedJob.title}</div>
+                    <div className="text-xs text-text-secondary">{selectedJob.type}</div>
                   </div>
-
-                  <div className="p-5 rounded-lg bg-surface border border-accent/10 space-y-4">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="p-3 rounded bg-bg/50 border border-accent/5 space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-text-muted">Semantic Match</span>
-                          <span className="font-mono text-xs text-accent">×{weights.semantic}</span>
-                        </div>
-                        <div className="text-lg font-mono text-text">{(matchScore.semanticRaw * 100).toFixed(0)}%</div>
-                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-accent">{matchScore.semantic}</span></div>
-                      </div>
-                      <div className="p-3 rounded bg-bg/50 border border-accent/5 space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-text-muted">Skill Coverage</span>
-                          <span className="font-mono text-xs text-accent">×{weights.skill_coverage}</span>
-                        </div>
-                        <div className="text-lg font-mono text-text">{(matchScore.skillCoverageRaw * 100).toFixed(0)}%</div>
-                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-accent">{matchScore.skillCoverage}</span></div>
-                      </div>
-                      <div className="p-3 rounded bg-bg/50 border border-employer-accent/20 space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-text-muted">Verification Score</span>
-                          <span className="font-mono text-xs text-employer-accent">×{weights.verification}</span>
-                        </div>
-                        <div className="text-lg font-mono text-text">{(matchScore.verificationRaw * 100).toFixed(0)}%</div>
-                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-employer-accent">{matchScore.verification}</span></div>
-                      </div>
-                      <div className="p-3 rounded bg-bg/50 border border-accent/5 space-y-1">
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-text-muted">Context Fit</span>
-                          <span className="font-mono text-xs text-accent">×{weights.context_fit}</span>
-                        </div>
-                        <div className="text-lg font-mono text-text">{(matchScore.contextFitRaw * 100).toFixed(0)}%</div>
-                        <div className="text-[10px] text-text-muted">Weighted: <span className="text-accent">{matchScore.contextFit}</span></div>
-                      </div>
+                  {compositeScore ? (
+                    <div className="flex flex-col items-center px-3 py-1.5 rounded-lg border bg-success/10 border-success/30 text-success">
+                      <span className="text-xl font-bold leading-none">{(Number(compositeScore.composite) * 100).toFixed(0)}%</span>
+                      <span className="text-[9px] font-mono uppercase tracking-wider opacity-80">composite</span>
                     </div>
+                  ) : (
+                    <div className={`flex flex-col items-center px-3 py-1.5 rounded-lg border ${matchColor(selectedJob.matchPct)}`}>
+                      <span className="text-xl font-bold leading-none">{selectedJob.matchPct}%</span>
+                      <span className="text-[9px] font-mono uppercase tracking-wider opacity-80">match</span>
+                    </div>
+                  )}
+                </div>
 
-                    <div className="p-4 rounded bg-success/10 border border-success/30 text-center">
-                      <div className="text-[10px] text-success font-mono uppercase tracking-wider mb-1">Composite Score</div>
-                      <div className="font-display text-4xl text-success">{matchScore.composite}</div>
-                      <div className="text-xs text-text-secondary mt-1">
-                        {parseFloat(matchScore.composite) >= 0.75 ? '✓ Strong Match — Fast-track to interview' :
-                         parseFloat(matchScore.composite) >= 0.60 ? '~ Marginal — Manual review required' :
-                         '✗ Significant gaps detected'}
+                {compositeScore && (
+                  <div className="p-4 rounded-lg bg-surface border border-accent/10 space-y-2">
+                    <div className="text-[10px] font-mono uppercase tracking-widest text-accent mb-1">Layer 1 + Layer 2 Score Breakdown</div>
+                    {[
+                      { label: 'Semantic (×0.40)', raw: compositeScore.semanticRaw, weighted: compositeScore.semantic },
+                      { label: 'Skill Coverage (×0.25)', raw: compositeScore.skillCoverageRaw, weighted: compositeScore.skillCoverage },
+                      { label: 'Verification (×0.20)', raw: compositeScore.verificationRaw, weighted: compositeScore.verification },
+                      { label: 'Context Fit (×0.15)', raw: compositeScore.contextFitRaw, weighted: compositeScore.contextFit },
+                    ].map(row => (
+                      <div key={row.label} className="flex items-center justify-between text-xs py-1 border-b border-accent/5 last:border-0">
+                        <span className="text-text-secondary">{row.label}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="text-text-muted">{(row.raw * 100).toFixed(0)}%</span>
+                          <span className="font-mono text-accent w-12 text-right">{row.weighted}</span>
+                        </div>
                       </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-2 border-t border-accent/10">
+                      <span className="text-sm font-medium text-text">Composite Score</span>
+                      <span className="font-mono text-success text-lg font-bold">{(Number(compositeScore.composite) * 100).toFixed(0)}%</span>
                     </div>
                   </div>
+                )}
 
-                  <div className="p-4 rounded-lg bg-surface border border-accent/10">
-                    <h3 className="font-mono text-xs uppercase tracking-wider text-accent mb-3">How Your Application is Evaluated</h3>
-                    <div className="grid md:grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <div className="font-medium text-text mb-1">What the AI Looks For:</div>
-                        <ul className="list-disc list-inside text-text-secondary space-y-1 text-xs">
-                          <li><strong className="text-text">Concrete Evidence:</strong> Verbatim quotes of what you actually built or solved.</li>
-                          <li><strong className="text-text">Work Context:</strong> Team size, pace, and autonomy preferences.</li>
-                          <li><strong className="text-text">Career Goals:</strong> Direction you're heading and what you want to avoid.</li>
-                          <li><strong className="text-danger">Red Flags:</strong> Vague answers, keyword stuffing, or inconsistencies.</li>
-                        </ul>
-                      </div>
-                      <div>
-                        <div className="font-medium text-text mb-1">Composite Score Ranges:</div>
-                        <div className="space-y-1 text-xs">
-                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-success"></span><span className="text-text"><strong>0.75 – 1.00 (Strong):</strong> Fast-track to interview.</span></div>
-                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-accent"></span><span className="text-text"><strong>0.60 – 0.74 (Marginal):</strong> Manual review or assessment required.</span></div>
-                          <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-full bg-danger"></span><span className="text-text"><strong>&lt; 0.60 (Reject):</strong> Significant skill or context gaps.</span></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button onClick={() => setStep(7)} className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors">
-                    Continue to Submit →
-                  </button>
-                </motion.div>
-              )}
-
-              {/* STEP 7: Contact Info */}
-              {step === 7 && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
+                <form onSubmit={handleContactSubmit} className="space-y-4">
                   <div>
-                    <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Final Step · Contact Details</span>
-
-                    <h2 className="font-display text-2xl text-text mt-1">Your Contact Information</h2>
-                    <p className="text-text-secondary text-sm mt-1">This is only shared with the hiring team if you are shortlisted. It is not used in AI scoring.</p>
+                    <label className="block text-sm font-medium text-text mb-2">Full Name <span className="text-danger">*</span></label>
+                    <input
+                      type="text" required autoFocus
+                      value={contactInfo.name}
+                      onChange={e => setContactInfo(p => ({ ...p, name: e.target.value }))}
+                      placeholder="Your full name"
+                      className="w-full bg-surface border border-accent/20 rounded-lg px-3 py-2.5 text-text text-sm focus:outline-none focus:border-accent transition-colors"
+                    />
                   </div>
-
-                  <div className="p-5 rounded-lg bg-surface border border-accent/10 space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-text mb-2">Full Name <span className="text-danger">*</span></label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-bg border border-accent/20 rounded-lg px-3 py-2 text-text text-sm focus:outline-none focus:border-accent transition-colors"
-                        placeholder="Your full name"
-                        value={contactInfo.name}
-                        onChange={e => setContactInfo(p => ({ ...p, name: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-text mb-2">Email Address <span className="text-danger">*</span></label>
-                      <input
-                        type="email"
-                        required
-                        className="w-full bg-bg border border-accent/20 rounded-lg px-3 py-2 text-text text-sm focus:outline-none focus:border-accent transition-colors"
-                        placeholder="you@example.com"
-                        value={contactInfo.email}
-                        onChange={e => setContactInfo(p => ({ ...p, email: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-text mb-2">Phone Number <span className="text-danger">*</span></label>
-                      <input
-                        type="tel"
-                        required
-                        className="w-full bg-bg border border-accent/20 rounded-lg px-3 py-2 text-text text-sm focus:outline-none focus:border-accent transition-colors"
-                        placeholder="+1 234 567 8900"
-                        value={contactInfo.phone}
-                        onChange={e => setContactInfo(p => ({ ...p, phone: e.target.value }))}
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text mb-2">Email Address <span className="text-danger">*</span></label>
+                    <input
+                      type="email" required
+                      value={contactInfo.email}
+                      onChange={e => setContactInfo(p => ({ ...p, email: e.target.value }))}
+                      placeholder="you@example.com"
+                      className="w-full bg-surface border border-accent/20 rounded-lg px-3 py-2.5 text-text text-sm focus:outline-none focus:border-accent transition-colors"
+                    />
                   </div>
-
+                  <div>
+                    <label className="block text-sm font-medium text-text mb-2">Phone Number <span className="text-danger">*</span></label>
+                    <input
+                      type="tel" required
+                      value={contactInfo.phone}
+                      onChange={e => setContactInfo(p => ({ ...p, phone: e.target.value }))}
+                      placeholder="+60 12-345 6789"
+                      className="w-full bg-surface border border-accent/20 rounded-lg px-3 py-2.5 text-text text-sm focus:outline-none focus:border-accent transition-colors"
+                    />
+                  </div>
                   <button
+                    type="submit"
                     disabled={!contactInfo.name || !contactInfo.email || !contactInfo.phone}
-                    onClick={() => {
-                      const avgConf = profile.skills.length > 0 ? profile.skills.reduce((s, sk) => s + sk.confidence, 0) / profile.skills.length : 0.5;
-                      const verScore = assessment ? assessment.normalised_score : 0;
-                      const application = {
-                        id: `live-${Date.now()}`,
-                        name: contactInfo.name,
-                        email: contactInfo.email,
-                        phone: contactInfo.phone,
-                        jobId: selectedJob.id,
-                        jobTitle: selectedJob.title,
-                        skills: profile.skills,
-                        work_context: profile.work_context,
-                        goals: profile.goals,
-                        soft_signals: profile.soft_signals,
-                        red_flags: profile.red_flags,
-                        assessment,
-                        matchScore,
-                        submittedAt: new Date().toISOString(),
-                        embedding_mock: [avgConf, Math.min(1, profile.skills.length / 10), verScore, avgConf * 0.9]
-                      };
-                      const existing = JSON.parse(localStorage.getItem('careesOS_applications') || '[]');
-                      localStorage.setItem('careesOS_applications', JSON.stringify([...existing, application]));
-                      setStep(8);
-                    }}
                     className="w-full py-3 rounded-lg bg-accent text-bg font-medium hover:bg-accent-hover transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Submit Application →
                   </button>
-                </motion.div>
-              )}
+                </form>
+              </motion.div>
+            )}
 
-              {/* STEP 8: Application Submitted (End of Applicant Journey) */}
-              {step === 8 && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 text-center py-12">
-                  <div className="w-20 h-20 rounded-full bg-success/20 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-4xl">✓</span>
-                  </div>
-                  <h2 className="font-display text-3xl text-text">Application Submitted Successfully</h2>
-                  <p className="text-text-secondary max-w-lg mx-auto">
-                    Your narrative has been extracted by our AI, and your work sample assessment has been securely graded. 
-                    Your profile is now in the reviewer queue, ranked by our composite matching engine.
+            {/* ── STEP 6: Submitted ── */}
+            {step === 6 && (
+              <motion.div key="s6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6 text-center py-12">
+                <div className="w-16 h-16 rounded-full bg-success/20 flex items-center justify-center mx-auto">
+                  <span className="text-3xl">✓</span>
+                </div>
+                <div>
+                  <h2 className="font-display text-3xl text-text mb-2">Application Submitted</h2>
+                  <p className="text-text-secondary text-sm max-w-sm mx-auto leading-relaxed">
+                    Your AI-extracted profile is now in the reviewer queue for{' '}
+                    <span className="text-accent font-medium">{selectedJob?.title}</span>.
                   </p>
-                  
-                  <div className="p-6 rounded-lg bg-surface border border-accent/10 max-w-md mx-auto text-left space-y-3">
-                    <h3 className="font-mono text-xs uppercase tracking-wider text-accent mb-2">What happens next?</h3>
-                    <div className="flex items-start gap-3">
-                      <span className="text-accent mt-1">1.</span>
-                      <p className="text-sm text-text-secondary">The hiring manager reviews your AI-extracted profile and verification badges.</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="text-accent mt-1">2.</span>
-                      <p className="text-sm text-text-secondary">Your resume (attached earlier) is available for their human context, but did not influence the AI score.</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <span className="text-accent mt-1">3.</span>
-                      <p className="text-sm text-text-secondary">If shortlisted, you will be contacted for a final culture-fit interview.</p>
-                    </div>
-                  </div>
+                </div>
 
-                  <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
-                    <button onClick={() => { setStep(1); setAnswers({}); setResumeFile(null); setProfile(null); setAssessment(null); setAssessmentAnswer(''); setContactInfo({ name: '', email: '', phone: '' }); setSelectedJob(null); }} className="px-6 py-3 rounded-lg bg-elevated text-text font-medium hover:bg-highlight transition-colors">
-                      Start New Application
-                    </button>
-                    <button onClick={() => navigate('/')} className="px-6 py-3 rounded-lg bg-elevated text-text font-medium hover:bg-highlight transition-colors">
-                      Back to Home
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                <div className="p-5 rounded-lg bg-surface border border-accent/10 max-w-sm mx-auto text-left space-y-3">
+                  <div className="text-[10px] font-mono uppercase tracking-widest text-accent mb-2">What happens next</div>
+                  {[
+                    'The hiring manager reviews your AI-extracted skills profile.',
+                    'If shortlisted, they will contact you at the email you provided.',
+                    'Your answers — not a resume — determined your match score.',
+                  ].map((text, i) => (
+                    <div key={i} className="flex items-start gap-2.5">
+                      <span className="text-accent text-xs mt-0.5 flex-shrink-0">{i + 1}.</span>
+                      <p className="text-xs text-text-secondary">{text}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                  <button onClick={resetAll} className="px-6 py-2.5 rounded-lg bg-elevated text-text text-sm font-medium hover:bg-highlight transition-colors">
+                    Start New Application
+                  </button>
+                  <button onClick={() => navigate('/')} className="px-6 py-2.5 rounded-lg bg-elevated text-text text-sm font-medium hover:bg-highlight transition-colors">
+                    Back to Home
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+          </AnimatePresence>
         </div>
       </div>
     </div>

@@ -12,27 +12,27 @@ function cosineSimilarity(vec1, vec2) {
 }
 
 function calculateScores(candidate, jobData, weights) {
+  if (!jobData || !candidate.embedding_mock || !jobData.embedding_mock) {
+    return { semantic: '0.000', skillCoverage: '0.000', verification: '0.000', contextFit: '0.000', composite: '0.000' };
+  }
   const semantic = cosineSimilarity(candidate.embedding_mock, jobData.embedding_mock);
-  const requiredNames = jobData.required_skills.filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
-  const candidateNames = candidate.skills.map(s => s.name.toLowerCase());
+  const requiredNames = (jobData.required_skills || []).filter(s => s.non_negotiable).map(s => s.name.toLowerCase());
+  const candidateNames = (candidate.skills || []).map(s => s.name.toLowerCase());
   const skillMatches = (req, extracted) => {
     const words = req.split(/\s+/).filter(w => w.length > 3);
     return words.some(w => extracted.some(s => s.includes(w))) || extracted.some(s => s.includes(req));
   };
   const matched = requiredNames.filter(req => skillMatches(req, candidateNames)).length;
   const skillCoverage = requiredNames.length > 0 ? matched / requiredNames.length : 1.0;
-  
-  const verifiedScores = candidate.skills.filter(s => s.verified && s.verified_score !== null).map(s => s.verified_score);
+  const verifiedScores = (candidate.skills || []).filter(s => s.verified && s.verified_score !== null).map(s => s.verified_score);
   const verification = verifiedScores.length > 0 ? verifiedScores.reduce((a, b) => a + b, 0) / verifiedScores.length : 0.0;
-  
-  let contextMatches = 0;
-  let contextTotal = 0;
-  if (candidate.work_context.preferred_pace === jobData.team_context.pace) { contextMatches++; contextTotal++; }
-  if (candidate.work_context.autonomy_level === jobData.team_context.autonomy_offered) { contextMatches++; contextTotal++; }
+  let contextMatches = 0, contextTotal = 0;
+  if (jobData.team_context) {
+    if (candidate.work_context?.preferred_pace === jobData.team_context.pace) { contextMatches++; contextTotal++; }
+    if (candidate.work_context?.autonomy_level === jobData.team_context.autonomy_offered) { contextMatches++; contextTotal++; }
+  }
   const contextFit = contextTotal > 0 ? contextMatches / contextTotal : 0.5;
-
   const composite = (semantic * weights.semantic) + (skillCoverage * weights.skill_coverage) + (verification * weights.verification) + (contextFit * weights.context_fit);
-
   return {
     semantic: semantic.toFixed(3),
     skillCoverage: skillCoverage.toFixed(3),
@@ -73,8 +73,31 @@ export default function Dashboard() {
   ];
 
   const matches = allCandidates.map(c => {
-    const jobData = c.jobId ? (jobs.find(j => j.id === c.jobId) || job) : job;
-    return { ...c, jobData, scores: calculateScores(c, jobData, weights) };
+    const jobData = c.jobId ? jobs.find(j => j.id === c.jobId) : null;
+    // Live application with full L1+L2 composite score from the applicant flow
+    if (c.submittedAt && c.matchScore?.semanticRaw) {
+      return {
+        ...c, jobData: jobData || job,
+        scores: {
+          semantic: parseFloat(c.matchScore.semanticRaw).toFixed(3),
+          skillCoverage: parseFloat(c.matchScore.skillCoverageRaw).toFixed(3),
+          verification: parseFloat(c.matchScore.verificationRaw).toFixed(3),
+          contextFit: parseFloat(c.matchScore.contextFitRaw).toFixed(3),
+          composite: c.matchScore.composite,
+        },
+        isLiveApp: true,
+      };
+    }
+    // Live application with simple L1-only score (normal job, no work sample)
+    if (c.submittedAt && c.matchScore?.composite) {
+      return {
+        ...c, jobData: jobData || job,
+        scores: { semantic: 'n/a', skillCoverage: 'n/a', verification: 'n/a', contextFit: 'n/a', composite: c.matchScore.composite },
+        isLiveApp: true,
+      };
+    }
+    // Mock candidate — recalculate with current weights
+    return { ...c, jobData: jobData || job, scores: calculateScores(c, jobData || job, weights) };
   }).sort((a, b) => parseFloat(b.scores.composite) - parseFloat(a.scores.composite));
 
   const handleRetrain = (rating) => {
@@ -145,9 +168,13 @@ export default function Dashboard() {
                               {idx + 1}
                             </div>
                             <div>
-                              <div className="text-text font-medium">{match.name}</div>
+                              <div className="flex items-center gap-2">
+                              <span className="text-text font-medium">{match.name}</span>
+                              {match.isLiveApp && <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-success/10 text-success border border-success/20">LIVE</span>}
+                            </div>
                               <div className="text-xs text-text-muted">
                                 {match.jobTitle && <span className="text-employer-accent/80 mr-2">{match.jobTitle}</span>}
+                                {match.roleInput && <span className="text-accent/60 mr-2">· {match.roleInput}</span>}
                                 {match.submittedAt ? `Applied ${timeAgo(match.submittedAt)}` : 'Applied 2 days ago'}
                                 {match.email && <span className="text-accent/70"> · {match.email}</span>}
                               </div>
@@ -239,6 +266,9 @@ export default function Dashboard() {
                         </div>
                       )}
                       <p className="text-text-secondary mt-1">Composite Score: <span className="text-accent font-display text-xl">{selectedCandidate.scores.composite}</span></p>
+                      {selectedCandidate.roleInput && (
+                        <p className="text-xs text-text-muted mt-0.5">Target role: <span className="text-accent/80">{selectedCandidate.roleInput}</span></p>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="text-xs text-text-muted mb-1">Current Model Weights</div>
@@ -285,7 +315,7 @@ export default function Dashboard() {
 
                     {/* Score Breakdown */}
                     <div className="p-5 rounded-lg bg-surface border border-accent/10">
-                      <h3 className="font-mono text-xs uppercase tracking-wider text-accent mb-4">Layer 2: Score Breakdown</h3>
+                      <h3 className="font-mono text-xs uppercase tracking-wider text-accent mb-4">Layer 1 + Layer 2: Score Breakdown</h3>
                       <div className="space-y-4">
                         <div className="flex items-center justify-between pb-2 border-b border-accent/10">
                           <span className="text-text-secondary text-sm">Semantic Similarity</span>
@@ -308,6 +338,26 @@ export default function Dashboard() {
                           <span className="font-mono text-accent font-medium">{selectedCandidate.scores.composite}</span>
                         </div>
                       </div>
+
+                      {selectedCandidate.workSampleGrade && (
+                        <div className="mt-4 p-3 rounded bg-success/5 border border-success/20 space-y-2">
+                          <div className="text-[10px] font-mono uppercase tracking-wider text-success mb-2">Work Sample AI Grade</div>
+                          {[
+                            { label: 'Task Completion', val: selectedCandidate.workSampleGrade.task_completion },
+                            { label: 'Technical Accuracy', val: selectedCandidate.workSampleGrade.technical_accuracy },
+                            { label: 'Work Quality', val: selectedCandidate.workSampleGrade.work_quality },
+                            { label: 'Communication', val: selectedCandidate.workSampleGrade.communication },
+                          ].map(row => (
+                            <div key={row.label} className="flex items-center justify-between text-xs">
+                              <span className="text-text-secondary">{row.label}</span>
+                              <span className="font-mono text-success">{((row.val || 0) * 100).toFixed(0)}%</span>
+                            </div>
+                          ))}
+                          {selectedCandidate.workSampleGrade.feedback && (
+                            <p className="text-[10px] text-text-muted italic border-t border-success/10 pt-2 mt-1">"{selectedCandidate.workSampleGrade.feedback}"</p>
+                          )}
+                        </div>
+                      )}
 
                       <div className="mt-4 p-4 rounded bg-bg/50 border border-accent/10">
                         <h4 className="font-mono text-[10px] uppercase tracking-wider text-accent mb-3">Reviewer Scoring Guide</h4>

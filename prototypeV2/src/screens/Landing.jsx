@@ -1,197 +1,236 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
-const paths = [
+const steps = [
   {
-    role: 'applicant',
-    tier: 'normal',
-    route: '/apply/normal',
-    label: 'Job Seeker',
-    sublabel: 'Standard',
-    badge: null,
-    description: 'Browse standard job listings and apply with your resume and a few quick questions.',
-    features: ['Upload your resume', 'Answer short screening questions', 'Apply to standard job listings'],
-    cta: 'Browse Jobs',
-    accentClass: 'border-accent/30 hover:border-accent/60',
-    badgeClass: '',
-    ctaClass: 'bg-elevated text-text hover:bg-highlight',
-    iconLabel: '◈',
+    number: '01',
+    title: 'Answer, don\'t paste',
+    body: 'Instead of uploading a keyword-stuffed resume, premium applicants answer 6 narrative questions about real work they\'ve done.',
   },
   {
-    role: 'applicant',
-    tier: 'premium',
-    route: '/apply/premium',
-    label: 'Job Seeker',
-    sublabel: 'Premium',
-    badge: 'PREMIUM',
-    description: 'Stand out with an AI-verified skills profile. Complete work samples that prove your abilities — not just claim them.',
-    features: [
-      'AI-extracted evidence-based skill profile',
-      'Work sample assessment graded by AI',
-      'Job match % score for premium listings',
-      'Access to all job listings',
-    ],
-    cta: 'Get Started',
-    accentClass: 'border-accent/60 hover:border-accent ring-1 ring-accent/20',
-    badgeClass: 'bg-accent/10 text-accent border border-accent/30',
-    ctaClass: 'bg-accent text-bg hover:bg-accent-hover',
-    iconLabel: '◆',
+    number: '02',
+    title: 'Prove it with a task',
+    body: 'Complete a short, role-specific work sample. Your actual reasoning is graded by AI — not just your word count.',
   },
   {
-    role: 'recruiter',
-    tier: 'normal',
-    route: '/post/normal',
-    label: 'Recruiter',
-    sublabel: 'Standard',
-    badge: null,
-    description: 'Post standard job listings with customizable screening questions. Review applicants and their resume at your own pace.',
-    features: ['Post standard job listings', 'Choose generic screening questions', 'View applicant answers and resumes', 'Filter by availability, salary, relocation'],
-    cta: 'Post a Job',
-    accentClass: 'border-employer-accent/30 hover:border-employer-accent/60',
-    badgeClass: '',
-    ctaClass: 'bg-elevated text-text hover:bg-highlight',
-    iconLabel: '◈',
-  },
-  {
-    role: 'recruiter',
-    tier: 'premium',
-    route: '/post/premium',
-    label: 'Recruiter',
-    sublabel: 'Premium',
-    badge: 'PREMIUM',
-    description: 'Use AI screening to rank applicants by verified skills — not just keywords. Let the work sample do the shortlisting.',
-    features: [
-      'Premium-tagged job listings',
-      'Custom open-ended narrative questions',
-      'AI-graded work sample assessments',
-      'Composite match score per applicant',
-      'Post-hire feedback loop & weight retraining',
-    ],
-    cta: 'Post a Premium Job',
-    accentClass: 'border-employer-accent/60 hover:border-employer-accent ring-1 ring-employer-accent/20',
-    badgeClass: 'bg-employer-accent/10 text-employer-accent border border-employer-accent/30',
-    ctaClass: 'bg-employer-accent text-bg hover:opacity-90',
-    iconLabel: '◆',
+    number: '03',
+    title: 'Get matched by evidence',
+    body: 'A composite score is calculated across skill coverage, evidence quality, verification, and culture fit — visible to both you and the reviewer.',
   },
 ];
 
-const containerVariants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.08 } },
-};
+const comparison = [
+  { label: 'Application method',     standard: 'Resume + screening Qs', premium: '6 narrative questions + work sample' },
+  { label: 'AI skill extraction',    standard: '—',                      premium: 'Evidence-based, confidence-scored' },
+  { label: 'Skill verification',     standard: '—',                      premium: 'Graded practical task' },
+  { label: 'Match score',            standard: '—',                      premium: 'Composite score (4 factors)' },
+  { label: 'Match % on listings',    standard: '—',                      premium: 'Visible before you apply' },
+  { label: 'Reviewer ranking',       standard: 'Manual',                 premium: 'AI-ranked by composite score' },
+];
 
-const cardVariants = {
-  hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
-};
+const pathButtons = [
+  {
+    route: '/apply/normal',
+    label: 'Job Seeker',
+    sublabel: 'Standard',
+    description: 'Resume + screening questions.',
+    badge: null,
+    cardClass: 'border-accent/15 hover:border-accent/40 hover:bg-surface',
+    sublabelClass: 'text-text-muted',
+  },
+  {
+    route: '/apply/premium',
+    label: 'Job Seeker',
+    sublabel: 'Premium',
+    description: 'AI profile + work sample + match score.',
+    badge: 'PREMIUM',
+    cardClass: 'border-accent/40 hover:border-accent bg-accent/5 hover:bg-accent/10',
+    sublabelClass: 'text-accent',
+    badgeClass: 'bg-accent/10 text-accent border border-accent/30',
+  },
+  {
+    route: '/post/normal',
+    label: 'Job Advertiser',
+    sublabel: 'Standard',
+    description: 'Post a listing with screening questions.',
+    badge: null,
+    cardClass: 'border-employer-accent/15 hover:border-employer-accent/40 hover:bg-surface',
+    sublabelClass: 'text-text-muted',
+  },
+  {
+    route: '/advertiser/premium',
+    label: 'Job Advertiser',
+    sublabel: 'Premium',
+    description: 'Post jobs or review AI-ranked applicants.',
+    badge: 'PREMIUM',
+    cardClass: 'border-employer-accent/40 hover:border-employer-accent bg-employer-accent/5 hover:bg-employer-accent/10',
+    sublabelClass: 'text-employer-accent',
+    badgeClass: 'bg-employer-accent/10 text-employer-accent border border-employer-accent/30',
+  },
+];
+
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 18 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.4, delay },
+});
 
 export default function Landing() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-accent/10">
-        <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">[T] Career OS V2</span>
-        <span className="text-xs text-text-muted">Prototype · Select your path</span>
+    <div className="min-h-screen bg-bg text-text flex flex-col">
+
+      {/* ── Nav ── */}
+      <header className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-accent/10 bg-bg/80 backdrop-blur-sm">
+        <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">Career OS V2</span>
+        <span className="text-[10px] text-text-muted font-mono uppercase tracking-wider px-2 py-1 rounded border border-accent/20">Prototype</span>
       </header>
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-        <motion.div
-          initial={{ opacity: 0, y: -12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="text-center mb-10"
-        >
-          <h1 className="font-display text-4xl text-text mb-3">Welcome to CareerOS</h1>
-          <p className="text-text-secondary max-w-lg mx-auto text-sm leading-relaxed">
-            A next-generation talent platform built on verified skills, not keywords.
-            Choose your role and tier below.
-          </p>
-        </motion.div>
+      <main className="flex-1">
 
-        <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Group label — Applicants */}
-          <div className="md:col-span-1">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-3 text-center">Job Seekers</div>
-            <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-4">
-              {paths.filter(p => p.role === 'applicant').map(path => (
-                <PathCard key={path.route} path={path} onNavigate={() => navigate(path.route)} />
+        {/* ── Hero ── */}
+        <section className="flex flex-col items-center justify-center text-center px-6 pt-24 pb-20 max-w-3xl mx-auto">
+          <motion.div {...fadeUp(0)}>
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-mono uppercase tracking-widest mb-6">
+              Verified skills · not keywords
+            </div>
+            <h1 className="font-display text-5xl md:text-6xl text-text leading-tight mb-5">
+              Hiring that rewards<br />what you can actually do
+            </h1>
+            <p className="text-text-secondary text-base max-w-xl mx-auto leading-relaxed">
+              CareerOS replaces keyword-matching with an AI pipeline that extracts evidence
+              from how you describe your work — then verifies it with a real task.
+            </p>
+          </motion.div>
+        </section>
+
+        {/* ── The Problem ── */}
+        <section className="border-t border-accent/10 py-20 px-6">
+          <div className="max-w-3xl mx-auto">
+            <motion.div {...fadeUp(0)} className="mb-12 text-center">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">The Problem</div>
+              <h2 className="font-display text-3xl text-text mb-4">Resumes reward writers,<br />not workers</h2>
+              <p className="text-text-secondary text-sm max-w-lg mx-auto leading-relaxed">
+                Most hiring tools rank candidates by how many keywords they fit into a PDF.
+                This creates a race to optimise language — not demonstrate competence.
+                The best candidate rarely has the best-formatted resume.
+              </p>
+            </motion.div>
+
+            <div className="grid md:grid-cols-3 gap-4">
+              {[
+                { stat: '72%', label: 'of qualified candidates are filtered out by ATS before a human sees their application' },
+                { stat: '3×', label: 'more predictive work sample assessments are vs. resume screening alone' },
+                { stat: '0', label: 'resume keywords are parsed by CareerOS — only your narrative and your work' },
+              ].map((item, i) => (
+                <motion.div key={i} {...fadeUp(i * 0.08)} className="p-5 rounded-xl bg-surface border border-accent/10 text-center">
+                  <div className="font-display text-4xl text-accent mb-2">{item.stat}</div>
+                  <p className="text-xs text-text-secondary leading-relaxed">{item.label}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── How It Works ── */}
+        <section className="border-t border-accent/10 py-20 px-6 bg-surface/30">
+          <div className="max-w-3xl mx-auto">
+            <motion.div {...fadeUp(0)} className="mb-12 text-center">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">How It Works</div>
+              <h2 className="font-display text-3xl text-text">Three layers. One honest score.</h2>
+            </motion.div>
+            <div className="grid md:grid-cols-3 gap-6">
+              {steps.map((step, i) => (
+                <motion.div key={i} {...fadeUp(i * 0.1)} className="flex flex-col gap-3">
+                  <div className="text-3xl font-mono text-accent/30 font-bold">{step.number}</div>
+                  <h3 className="text-base font-medium text-text">{step.title}</h3>
+                  <p className="text-sm text-text-secondary leading-relaxed">{step.body}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Standard vs Premium ── */}
+        <section className="border-t border-accent/10 py-20 px-6">
+          <div className="max-w-3xl mx-auto">
+            <motion.div {...fadeUp(0)} className="mb-10 text-center">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">Tiers</div>
+              <h2 className="font-display text-3xl text-text">Standard or Premium?</h2>
+            </motion.div>
+            <motion.div {...fadeUp(0.1)} className="rounded-xl bg-surface border border-accent/10 overflow-hidden">
+              <div className="grid grid-cols-3 bg-elevated px-5 py-3 text-[10px] font-mono uppercase tracking-wider">
+                <div className="text-text-muted">Feature</div>
+                <div className="text-text-muted text-center">Standard</div>
+                <div className="text-accent text-center">Premium</div>
+              </div>
+              {comparison.map((row, i) => (
+                <div
+                  key={i}
+                  className={`grid grid-cols-3 px-5 py-3.5 text-sm border-t border-accent/5 ${i % 2 === 0 ? '' : 'bg-bg/30'}`}
+                >
+                  <div className="text-text-secondary text-xs">{row.label}</div>
+                  <div className="text-center text-xs text-text-muted">{row.standard}</div>
+                  <div className="text-center text-xs text-accent font-medium">{row.premium}</div>
+                </div>
               ))}
             </motion.div>
           </div>
+        </section>
 
-          {/* Group label — Recruiters */}
-          <div className="md:col-span-1">
-            <div className="text-[10px] font-mono uppercase tracking-widest text-text-muted mb-3 text-center">Recruiters</div>
-            <motion.div variants={containerVariants} initial="hidden" animate="show" className="space-y-4">
-              {paths.filter(p => p.role === 'recruiter').map(path => (
-                <PathCard key={path.route} path={path} onNavigate={() => navigate(path.route)} />
+        {/* ── Final CTA ── */}
+        <section className="border-t border-accent/10 py-20 px-6 text-center">
+          <div className="max-w-xl mx-auto">
+            <motion.div {...fadeUp(0)}>
+              <h2 className="font-display text-3xl text-text mb-4">Ready to try it?</h2>
+              <p className="text-text-secondary text-sm mb-8 leading-relaxed">
+                Pick your path below. The full premium flow — from narrative extraction to composite score — takes about 20 minutes.
+              </p>
+            </motion.div>
+            <motion.div {...fadeUp(0.1)} className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl mx-auto">
+              {pathButtons.map((btn, i) => (
+                <button
+                  key={btn.route}
+                  onClick={() => navigate(btn.route)}
+                  className={`group text-left p-5 rounded-xl bg-surface border transition-all ${btn.cardClass}`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-medium text-text">{btn.label}</span>
+                        {btn.badge && (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider ${btn.badgeClass}`}>
+                            {btn.badge}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`text-[10px] font-mono uppercase tracking-wider ${btn.sublabelClass}`}>{btn.sublabel}</div>
+                    </div>
+                    <span className="text-text-muted group-hover:text-text text-sm transition-all group-hover:translate-x-0.5 mt-0.5">→</span>
+                  </div>
+                  <p className="text-xs text-text-secondary">{btn.description}</p>
+                </button>
               ))}
             </motion.div>
           </div>
-        </div>
+        </section>
 
-        {/* Reviewer shortcut */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-10 flex gap-6 text-xs text-text-muted"
-        >
+      </main>
+
+      {/* ── Footer ── */}
+      <footer className="border-t border-accent/10 px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <span className="font-mono text-[10px] uppercase tracking-widest text-text-muted">Career OS V2 · Prototype</span>
+        <div className="flex gap-5 text-xs text-text-muted">
           <button onClick={() => navigate('/reviewer/normal')} className="hover:text-text transition-colors underline underline-offset-2">
-            Normal Reviewer Dashboard →
+            Reviewer (Standard)
           </button>
           <button onClick={() => navigate('/reviewer/premium')} className="hover:text-accent transition-colors underline underline-offset-2">
-            Premium Reviewer Dashboard →
+            Reviewer (Premium)
           </button>
-        </motion.div>
-      </main>
-    </div>
-  );
-}
-
-function PathCard({ path, onNavigate }) {
-  return (
-    <motion.div
-      variants={cardVariants}
-      onClick={onNavigate}
-      className={`p-5 rounded-xl bg-surface border cursor-pointer transition-all group ${path.accentClass}`}
-    >
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className={`text-lg ${path.tier === 'premium' ? 'text-accent' : 'text-text-muted'}`}>{path.iconLabel}</span>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-text font-medium text-sm">{path.label}</span>
-              {path.badge && (
-                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider ${path.badgeClass}`}>
-                  {path.badge}
-                </span>
-              )}
-            </div>
-            <div className="text-[10px] text-text-muted font-mono uppercase tracking-wider">{path.sublabel}</div>
-          </div>
         </div>
-        <span className="text-text-muted group-hover:text-text text-lg transition-transform group-hover:translate-x-0.5">→</span>
-      </div>
-
-      <p className="text-text-secondary text-xs leading-relaxed mb-4">{path.description}</p>
-
-      <ul className="space-y-1 mb-4">
-        {path.features.map((f, i) => (
-          <li key={i} className="flex items-start gap-2 text-[11px] text-text-secondary">
-            <span className="text-accent/60 mt-0.5 flex-shrink-0">✓</span>
-            {f}
-          </li>
-        ))}
-      </ul>
-
-      <button
-        onClick={e => { e.stopPropagation(); onNavigate(); }}
-        className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${path.ctaClass}`}
-      >
-        {path.cta}
-      </button>
-    </motion.div>
+      </footer>
+    </div>
   );
 }

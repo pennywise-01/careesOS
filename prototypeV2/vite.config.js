@@ -153,14 +153,16 @@ Required JSON structure:
               const extracted = JSON.parse(data.choices[0].message.content);
               res.end(JSON.stringify({ success: true, data: extracted }));
             } else {
+              const deepseekError = data.error?.message || JSON.stringify(data);
+              console.error('DeepSeek returned error:', deepseekError);
               res.statusCode = 500;
-              res.end(JSON.stringify({ success: false, error: 'Failed to parse DeepSeek response' }));
+              res.end(JSON.stringify({ success: false, error: deepseekError }));
             }
           } catch (error) {
             console.error('DeepSeek API Error:', error);
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ success: false, error: 'Internal server error' }));
+            res.end(JSON.stringify({ success: false, error: error.message || 'Internal server error' }));
           }
         });
       });

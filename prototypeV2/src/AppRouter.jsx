@@ -6,6 +6,7 @@ import Dashboard from './screens/Dashboard';
 import NormalReviewerDashboard from './screens/NormalReviewerDashboard';
 import NormalJobPost from './screens/NormalJobPost';
 import PremiumJobPost from './screens/PremiumJobPost';
+import PremiumAdvertiserHub from './screens/PremiumAdvertiserHub';
 
 export default function AppRouter() {
   return (
@@ -20,6 +21,9 @@ export default function AppRouter() {
       {/* Reviewer dashboards */}
       <Route path="/reviewer/premium" element={<Dashboard />} />
       <Route path="/reviewer/normal" element={<NormalReviewerDashboard />} />
+
+      {/* Premium advertiser hub */}
+      <Route path="/advertiser/premium" element={<PremiumAdvertiserHub />} />
 
       {/* Job posting */}
       <Route path="/post/normal" element={<NormalJobPost />} />
