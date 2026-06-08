@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { jobs } from '../data/mockData';
+import { jobs, normalJobs } from '../data/mockData';
 
 export default function UserJourney() {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
+
+  // Merge premium seed jobs + locally posted premium jobs from localStorage
+  const postedPremiumJobs = JSON.parse(localStorage.getItem('careesOS_premium_jobs') || '[]');
+  const allJobs = [...jobs, ...normalJobs, ...postedPremiumJobs];
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
   
@@ -162,8 +166,15 @@ export default function UserJourney() {
   return (
     <div className="h-screen flex flex-col">
       <header className="flex items-center justify-between px-5 py-3 border-b border-accent/10 flex-shrink-0 bg-surface/30">
-        <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">[T] Career OS V2 · Comprehensive Journey</span>
-        <button onClick={() => navigate('/reviewer')} className="text-sm font-medium px-4 py-2 rounded-lg bg-employer-accent text-bg hover:opacity-90 transition-colors">
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/')} className="text-xs text-text-muted hover:text-text transition-colors">← Home</button>
+          <span className="text-text-muted text-xs">|</span>
+          <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">[T] Career OS V2</span>
+          <span className="text-text-muted text-xs">·</span>
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-accent/10 text-accent border border-accent/30">PREMIUM</span>
+          <span className="text-xs text-text-secondary">Applicant</span>
+        </div>
+        <button onClick={() => navigate('/reviewer/premium')} className="text-sm font-medium px-4 py-2 rounded-lg bg-employer-accent text-bg hover:opacity-90 transition-colors">
           Reviewer Dashboard →
         </button>
       </header>
@@ -178,26 +189,48 @@ export default function UserJourney() {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="space-y-6">
                   <div>
                     <span className="font-mono text-[10px] uppercase tracking-wider text-accent">Step 1 · Job Discovery</span>
-                    <h2 className="font-display text-2xl text-text mt-1">Select a Role to Apply</h2>
-                    <p className="text-text-secondary text-sm mt-1">Each role has its own tailored questions and work sample task.</p>
+                    <h2 className="font-display text-2xl text-text mt-1">All Available Roles</h2>
+                    <p className="text-text-secondary text-sm mt-1">Premium jobs use AI-graded work samples. Standard jobs use a quick questions-and-resume flow.</p>
                   </div>
                   <div className="space-y-3">
-                    {jobs.map(j => (
-                      <div key={j.id} className="p-6 rounded-lg bg-surface border border-accent/20 hover:border-accent/40 transition-all cursor-pointer group" onClick={() => { setSelectedJob(j); setStep(2); }}>
+                    {allJobs.map(j => (
+                      <div
+                        key={j.id}
+                        className="p-6 rounded-lg bg-surface border border-accent/20 hover:border-accent/40 transition-all cursor-pointer group"
+                        onClick={() => {
+                          if (!j.premium) {
+                            navigate('/apply/normal', { state: { preselectedJob: j } });
+                          } else {
+                            setSelectedJob(j);
+                            setStep(2);
+                          }
+                        }}
+                      >
                         <div className="flex justify-between items-start">
-                          <div>
-                            <div className="text-[10px] font-mono uppercase tracking-wider text-accent mb-1">{j.department}</div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div className="text-[10px] font-mono uppercase tracking-wider text-accent">{j.department}</div>
+                              {j.premium
+                                ? <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-accent/10 text-accent border border-accent/30">PREMIUM</span>
+                                : <span className="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase bg-elevated text-text-muted">Standard</span>
+                              }
+                            </div>
                             <h3 className="text-lg font-medium text-text">{j.title}</h3>
                             <p className="text-sm text-text-secondary mt-1">{j.type}</p>
-                            <div className="flex flex-wrap gap-2 mt-3">
-                              {j.required_skills.map(s => (
-                                <span key={s.name} className={`px-2 py-1 rounded text-xs ${s.non_negotiable ? 'bg-accent/10 text-accent' : 'bg-elevated text-text-muted'}`}>
-                                  {s.name} ({s.level}){s.non_negotiable && ' ✱'}
-                                </span>
-                              ))}
-                            </div>
+                            {j.premium && j.required_skills && (
+                              <div className="flex flex-wrap gap-2 mt-3">
+                                {j.required_skills.map(s => (
+                                  <span key={s.name} className={`px-2 py-1 rounded text-xs ${s.non_negotiable ? 'bg-accent/10 text-accent' : 'bg-elevated text-text-muted'}`}>
+                                    {s.name} ({s.level}){s.non_negotiable && ' ✱'}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {!j.premium && (
+                              <p className="text-xs text-text-muted mt-2 italic">Quick apply — resume + {j.generic_questions?.length || 0} screening questions</p>
+                            )}
                           </div>
-                          <span className="text-accent text-xl group-hover:translate-x-1 transition-transform">→</span>
+                          <span className="text-accent text-xl group-hover:translate-x-1 transition-transform ml-4">→</span>
                         </div>
                       </div>
                     ))}
@@ -644,6 +677,9 @@ export default function UserJourney() {
                   <div className="flex flex-col sm:flex-row gap-4 justify-center mt-8">
                     <button onClick={() => { setStep(1); setAnswers({}); setResumeFile(null); setProfile(null); setAssessment(null); setAssessmentAnswer(''); setContactInfo({ name: '', email: '', phone: '' }); setSelectedJob(null); }} className="px-6 py-3 rounded-lg bg-elevated text-text font-medium hover:bg-highlight transition-colors">
                       Start New Application
+                    </button>
+                    <button onClick={() => navigate('/')} className="px-6 py-3 rounded-lg bg-elevated text-text font-medium hover:bg-highlight transition-colors">
+                      Back to Home
                     </button>
                   </div>
                 </motion.div>

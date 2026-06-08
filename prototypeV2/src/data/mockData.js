@@ -1,3 +1,18 @@
+// Generic question preset library — used by normal job advertisers to configure job ads
+export const genericQuestionPresets = [
+  { id: "gq_salary",      label: "Expected Salary",         question: "What is your expected monthly salary (MYR)?",                         type: "text",   placeholder: "e.g. 5,000 – 7,000" },
+  { id: "gq_relocate",    label: "Willingness to Relocate", question: "Are you willing to relocate for this role?",                          type: "select", options: ["Yes", "No", "Open to discussion"] },
+  { id: "gq_startdate",   label: "Earliest Start Date",     question: "What is your earliest available start date?",                         type: "text",   placeholder: "e.g. Immediately, 1 month notice" },
+  { id: "gq_experience",  label: "Years of Experience",     question: "How many years of relevant experience do you have?",                  type: "select", options: ["Less than 1 year", "1–2 years", "3–5 years", "5–8 years", "8+ years"] },
+  { id: "gq_status",      label: "Current Employment",      question: "What is your current employment status?",                             type: "select", options: ["Currently employed", "Serving notice period", "Immediately available", "Freelancing"] },
+  { id: "gq_arrangement", label: "Work Arrangement",        question: "What is your preferred work arrangement?",                            type: "select", options: ["Remote", "Hybrid", "On-site", "No preference"] },
+  { id: "gq_education",   label: "Highest Education",       question: "What is your highest level of education?",                           type: "select", options: ["SPM / O-Level", "Diploma", "Bachelor's Degree", "Master's Degree", "PhD", "Professional Certification"] },
+  { id: "gq_industry",    label: "Industry Experience",     question: "Have you worked in this industry before?",                           type: "select", options: ["Yes, extensively", "Yes, briefly", "No, but in adjacent industry", "No, this would be new"] },
+  { id: "gq_notice",      label: "Notice Period",           question: "What is your current notice period?",                                type: "select", options: ["No notice required", "1 week", "2 weeks", "1 month", "2 months", "3 months"] },
+  { id: "gq_languages",   label: "Languages Spoken",        question: "What languages are you fluent in (spoken and written)?",             type: "text",   placeholder: "e.g. English, Bahasa Malaysia, Mandarin" },
+];
+
+// Premium applicant seed data (AI-extracted profiles)
 export const candidates = [
   {
     id: "c1",
@@ -34,9 +49,75 @@ export const candidates = [
   }
 ];
 
+// Normal applicant seed data (generic question answers only)
+export const normalCandidates = [
+  {
+    id: "nc1",
+    name: "Diana Lim",
+    email: "diana@example.com",
+    phone: "+60 12-345 6789",
+    jobId: "nj1",
+    jobTitle: "Customer Service Executive",
+    resumeFile: "diana_lim_cv.pdf",
+    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    answers: {
+      gq_salary: "3,500 – 4,500",
+      gq_relocate: "Yes",
+      gq_startdate: "2 weeks notice",
+      gq_experience: "3–5 years",
+      gq_status: "Currently employed",
+      gq_arrangement: "Hybrid",
+      gq_education: "Bachelor's Degree",
+      gq_languages: "English, Bahasa Malaysia, Mandarin"
+    }
+  },
+  {
+    id: "nc2",
+    name: "Farid Hassan",
+    email: "farid@example.com",
+    phone: "+60 11-234 5678",
+    jobId: "nj1",
+    jobTitle: "Customer Service Executive",
+    resumeFile: "farid_hassan_resume.pdf",
+    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 28).toISOString(),
+    answers: {
+      gq_salary: "3,000 – 3,800",
+      gq_relocate: "No",
+      gq_startdate: "Immediately",
+      gq_experience: "1–2 years",
+      gq_status: "Immediately available",
+      gq_arrangement: "On-site",
+      gq_education: "Diploma",
+      gq_languages: "English, Bahasa Malaysia"
+    }
+  },
+  {
+    id: "nc3",
+    name: "Grace Tan",
+    email: "grace@example.com",
+    phone: "+60 16-789 0123",
+    jobId: "nj2",
+    jobTitle: "Marketing Coordinator",
+    resumeFile: "grace_tan_cv.pdf",
+    submittedAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
+    answers: {
+      gq_salary: "4,000 – 5,000",
+      gq_relocate: "Open to discussion",
+      gq_startdate: "1 month notice",
+      gq_experience: "3–5 years",
+      gq_status: "Currently employed",
+      gq_arrangement: "Hybrid",
+      gq_education: "Bachelor's Degree",
+      gq_industry: "Yes, extensively",
+      gq_languages: "English, Mandarin"
+    }
+  }
+];
+
 export const job = {
   id: "j1",
   title: "Senior Platform Engineer",
+  premium: true,
   required_skills: [
     { name: "Kubernetes", level: "senior", non_negotiable: true },
     { name: "Python", level: "senior", non_negotiable: true }
@@ -49,6 +130,7 @@ export const jobs = [
   {
     id: "j1",
     title: "Senior Platform Engineer",
+    premium: true,
     department: "Platform Engineering",
     type: "Full-time · Hybrid",
     required_skills: [
@@ -92,6 +174,7 @@ export const jobs = [
   {
     id: "j2",
     title: "HR Business Partner",
+    premium: true,
     department: "People & Culture",
     type: "Full-time · On-site",
     required_skills: [
@@ -135,6 +218,7 @@ export const jobs = [
   {
     id: "j3",
     title: "Operations Administrator",
+    premium: true,
     department: "Operations",
     type: "Full-time · On-site",
     required_skills: [
@@ -174,6 +258,42 @@ export const jobs = [
       artifact_type: "text",
       placeholder: "1. Inefficiency #1: ...\n   Fix: ...\n   Owner: ...\n   Timeline: ...\n\n2. Inefficiency #2: ...\n\n3. Inefficiency #3: ...\n\nStakeholder buy-in approach: ..."
     }
+  }
+];
+
+// Normal job listings (no AI screening, generic questions only)
+export const normalJobs = [
+  {
+    id: "nj1",
+    title: "Customer Service Executive",
+    premium: false,
+    department: "Customer Experience",
+    type: "Full-time · On-site",
+    description: "We are looking for a friendly and reliable Customer Service Executive to handle inbound enquiries, resolve customer issues, and maintain high satisfaction scores across our support channels.",
+    requirements: [
+      "Minimum 1 year in a customer-facing role",
+      "Strong communication skills in English and Bahasa Malaysia",
+      "Comfortable working rotating shifts including weekends",
+      "Experience with CRM tools is an advantage"
+    ],
+    about_company: "RetailCo is a fast-growing e-commerce platform serving 500,000 customers across Malaysia. Our customer service team is the backbone of our brand reputation.",
+    generic_questions: ["gq_salary", "gq_relocate", "gq_startdate", "gq_experience", "gq_status", "gq_arrangement", "gq_languages"]
+  },
+  {
+    id: "nj2",
+    title: "Marketing Coordinator",
+    premium: false,
+    department: "Marketing",
+    type: "Full-time · Hybrid",
+    description: "We need a Marketing Coordinator to support campaign execution, manage social media calendars, coordinate with vendors, and track campaign performance metrics across digital and offline channels.",
+    requirements: [
+      "Diploma or Degree in Marketing, Communications, or related field",
+      "1–3 years of marketing or content coordination experience",
+      "Familiarity with social media platforms and basic analytics tools",
+      "Organised with strong attention to detail"
+    ],
+    about_company: "BrandSpace Agency is a boutique marketing agency working with regional consumer brands. We offer a fast-paced, collaborative environment with exposure to diverse client portfolios.",
+    generic_questions: ["gq_salary", "gq_relocate", "gq_experience", "gq_status", "gq_arrangement", "gq_education", "gq_industry", "gq_languages"]
   }
 ];
 

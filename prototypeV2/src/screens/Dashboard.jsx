@@ -97,13 +97,24 @@ export default function Dashboard() {
     <div className="h-screen flex flex-col">
       <header className="flex items-center justify-between px-5 py-3 border-b border-accent/10 flex-shrink-0 bg-surface/30">
         <div className="flex items-center gap-3">
-          <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">[T] Career OS V2</span>
+          <button onClick={() => navigate('/')} className="text-xs text-text-muted hover:text-text transition-colors">← Home</button>
           <span className="text-text-muted text-xs">|</span>
+          <span className="font-mono text-[11px] tracking-[0.15em] uppercase text-accent">[T] Career OS V2</span>
+          <span className="text-text-muted text-xs">·</span>
+          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider bg-accent/10 text-accent border border-accent/30">PREMIUM</span>
           <span className="text-sm text-text-secondary">Reviewer Dashboard</span>
         </div>
-        <button onClick={() => navigate('/')} className="text-xs text-employer-accent hover:text-employer-accent/80 transition-colors border border-employer-accent/30 px-3 py-1 rounded-full">
-          ← Switch to Applicant View
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate('/post/premium')} className="text-xs text-text-secondary hover:text-text border border-accent/20 px-3 py-1 rounded-full transition-colors">
+            + Post Job
+          </button>
+          <button onClick={() => navigate('/reviewer/normal')} className="text-xs text-text-muted hover:text-text transition-colors border border-accent/20 px-3 py-1 rounded-full">
+            Standard Dashboard
+          </button>
+          <button onClick={() => navigate('/apply/premium')} className="text-xs text-employer-accent hover:text-employer-accent/80 transition-colors border border-employer-accent/30 px-3 py-1 rounded-full">
+            ← Applicant View
+          </button>
+        </div>
       </header>
 
       <div className="flex flex-1 overflow-hidden">
